@@ -65,7 +65,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior: none;
+    touch-action: pan-y pan-x;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
