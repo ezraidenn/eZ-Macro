@@ -28,10 +28,7 @@ export function MetricCard({
   delay = 0,
 }: MetricCardProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
+    <div
       className={cn(
         "glass-card rounded-2xl p-4 space-y-2",
         className
@@ -72,6 +69,6 @@ export function MetricCard({
           <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

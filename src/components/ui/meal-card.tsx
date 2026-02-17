@@ -42,11 +42,7 @@ export function MealCard({ meal, onTap, onDelete, delay = 0 }: MealCardProps) {
   const totalFat = meal.foods.reduce((s, f) => s + f.fat, 0);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 12 }}
-      transition={{ duration: 0.3, delay }}
+    <div
       className="glass-card rounded-2xl p-4 active:scale-[0.98] transition-transform"
       onClick={onTap}
     >
@@ -122,7 +118,7 @@ export function MealCard({ meal, onTap, onDelete, delay = 0 }: MealCardProps) {
           <ChevronRight className="h-4 w-4 text-muted-foreground/30" />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

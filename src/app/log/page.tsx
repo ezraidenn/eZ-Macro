@@ -57,16 +57,38 @@ export default function LogPage() {
   const [userComment, setUserComment] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const compressImage = useCallback(async (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 1024;
+        let w = img.width;
+        let h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }, []);
+
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setImagePreview(dataUrl);
-      setMode("photo"); // Show photo mode with comment input BEFORE analyzing
-    };
-    reader.readAsDataURL(file);
-  }, []);
+    try {
+      const compressed = await compressImage(file);
+      setImagePreview(compressed);
+      setMode("photo");
+    } catch {
+      setError("Error al cargar la imagen");
+    }
+  }, [compressImage]);
 
   function adjustServing(index: number, delta: number) {
     setFoods((prev) =>
@@ -297,7 +319,10 @@ export default function LogPage() {
                         }),
                       });
 
-                      if (!res.ok) throw new Error("Analysis failed");
+                      if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.error || "Analysis failed");
+                      }
 
                       const data: AIFoodAnalysis = await res.json();
                       setAnalysis(data);
@@ -325,8 +350,10 @@ export default function LogPage() {
                       
                       setFoods(mapped);
                       setMode("review");
-                    } catch (err) {
-                      setError("Error al analizar la imagen. Intenta de nuevo.");
+                    } catch (err: any) {
+                      const msg = err?.message || "Error al analizar la imagen";
+                      setError(msg);
+                      toast.error(msg);
                       setMode("photo");
                     }
                   }}

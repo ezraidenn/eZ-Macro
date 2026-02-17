@@ -72,11 +72,7 @@ export default function DashboardPage() {
     <AppShell>
       <div className="px-4 pt-6 safe-top space-y-5">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
-        >
+        <div className="flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground">{getGreetingLocalized(locale)}</p>
             <h1 className="text-xl font-bold">{profile.name}</h1>
@@ -102,25 +98,15 @@ export default function DashboardPage() {
               <ChevronRight className="h-4 w-4 opacity-50" />
             </button>
           </div>
-        </motion.div>
+        </div>
 
         {/* Calorie Progress */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="glass-card rounded-2xl p-5"
-        >
+        <div className="glass-card rounded-2xl p-5">
           <CalorieBar consumed={totals.calories} target={targets.calories} />
-        </motion.div>
+        </div>
 
         {/* Macro Rings */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="glass-card rounded-2xl p-5"
-        >
+        <div className="glass-card rounded-2xl p-5">
           <div className="flex items-center justify-around">
             <MacroRing
               value={totals.protein}
@@ -149,7 +135,7 @@ export default function DashboardPage() {
               strokeWidth={5}
             />
           </div>
-        </motion.div>
+        </div>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-3">
@@ -185,12 +171,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Remaining Macros Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="glass-card rounded-2xl p-4"
-        >
+        <div className="glass-card rounded-2xl p-4">
           <p className="text-xs font-medium text-muted-foreground mb-3">
             {t(locale, "dashboard.remaining")}
           </p>
@@ -224,7 +205,7 @@ export default function DashboardPage() {
               color="text-red-400"
             />
           </div>
-        </motion.div>
+        </div>
 
         {/* Meals */}
         <div className="space-y-3">
@@ -248,11 +229,7 @@ export default function DashboardPage() {
           </div>
 
           {log.meals.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-12 text-center"
-            >
+            <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="h-12 w-12 rounded-2xl bg-secondary flex items-center justify-center mb-3">
                 <Plus className="h-5 w-5 text-muted-foreground" />
               </div>
@@ -260,7 +237,7 @@ export default function DashboardPage() {
               <p className="text-xs text-muted-foreground/60 mt-1">
                 {t(locale, "dashboard.noMealsHint")}
               </p>
-            </motion.div>
+            </div>
           ) : (
             <div className="space-y-2">
               {log.meals.map((meal, i) => (
