@@ -113,25 +113,25 @@ export default function DashboardPage() {
             <MacroRing
               value={totals.protein}
               target={targets.protein}
-              label="Protein"
+              label={t(locale, "macro.protein")}
               color="#6366f1"
             />
             <MacroRing
               value={totals.carbs}
               target={targets.carbs}
-              label="Carbs"
+              label={t(locale, "macro.carbs")}
               color="#f59e0b"
             />
             <MacroRing
               value={totals.fat}
               target={targets.fat}
-              label="Fat"
+              label={t(locale, "macro.fat")}
               color="#ef4444"
             />
             <MacroRing
               value={totals.fiber}
               target={targets.fiber}
-              label="Fiber"
+              label={t(locale, "macro.fiber")}
               color="#8b5cf6"
               size={72}
               strokeWidth={5}
@@ -179,28 +179,28 @@ export default function DashboardPage() {
           </p>
           <div className="grid grid-cols-4 gap-2">
             <RemainingChip
-              label="Calories"
+              label={t(locale, "macro.calories")}
               current={totals.calories}
               target={targets.calories}
               unit="kcal"
               color="text-emerald-400"
             />
             <RemainingChip
-              label="Protein"
+              label={t(locale, "macro.protein")}
               current={totals.protein}
               target={targets.protein}
               unit="g"
               color="text-indigo-400"
             />
             <RemainingChip
-              label="Carbs"
+              label={t(locale, "macro.carbs")}
               current={totals.carbs}
               target={targets.carbs}
               unit="g"
               color="text-amber-400"
             />
             <RemainingChip
-              label="Fat"
+              label={t(locale, "macro.fat")}
               current={totals.fat}
               target={targets.fat}
               unit="g"

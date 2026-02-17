@@ -58,11 +58,14 @@ export default function ShakesPage() {
     });
   }, []);
 
-  const pickPhoto = useCallback(() => {
+  const pickPhoto = useCallback((useCamera: boolean = false) => {
     if (images.length >= 3) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
+    if (useCamera) {
+      input.capture = "environment";
+    }
     input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (file) {
@@ -230,12 +233,12 @@ export default function ShakesPage() {
               ))}
               {images.length < 3 && (
                 <button
-                  onClick={pickPhoto}
+                  onClick={() => pickPhoto(true)}
                   className="flex-1 h-28 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 text-muted-foreground active:bg-secondary/50"
                 >
                   <Camera className="h-5 w-5" />
                   <span className="text-[10px]">
-                    {locale === "es" ? "Etiqueta" : "Label"} ({images.length}/3)
+                    {locale === "es" ? "Foto" : "Photo"} ({images.length}/3)
                   </span>
                 </button>
               )}

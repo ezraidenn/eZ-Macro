@@ -96,6 +96,7 @@ export default function LogPage() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
+    input.capture = "environment";
     input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (file) {
@@ -208,20 +209,18 @@ export default function LogPage() {
               exit={{ opacity: 0, y: -12 }}
               className="space-y-3"
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileSelect(file);
-                }}
-              />
-
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.accept = "image/*";
+                  input.capture = "environment";
+                  input.onchange = (e: any) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                  };
+                  input.click();
+                }}
                 className="flex w-full items-center gap-4 rounded-2xl bg-emerald-500/10 p-5 text-left active:bg-emerald-500/15 transition-colors"
               >
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">

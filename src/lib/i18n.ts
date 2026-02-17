@@ -189,6 +189,21 @@ const translations = {
     "macro.fat": "Grasa",
     "macro.fiber": "Fibra",
     "macro.calories": "Calorías",
+    "macro.proteinShort": "Proteína",
+    "macro.carbsShort": "Carbohidratos",
+    "macro.fatShort": "Grasa",
+    "macro.fiberShort": "Fibra",
+
+    // Units
+    "unit.g": "g",
+    "unit.kg": "kg",
+    "unit.kcal": "kcal",
+    "unit.protein": "proteína",
+    "unit.carbs": "carbohidratos",
+    "unit.fat": "grasa",
+    "unit.fiber": "fibra",
+    "unit.left": "restante",
+    "unit.remaining": "restante",
 
     // Common
     "common.deficit": "Déficit",
@@ -196,6 +211,10 @@ const translations = {
     "common.balance": "Balance",
     "common.dailyTarget": "Objetivo Diario",
     "common.loading": "Cargando...",
+    "common.protein": "Proteína",
+    "common.carbs": "Carbohidratos",
+    "common.fat": "Grasa",
+    "common.fiber": "Fibra",
   },
   en: {
     // Nav
@@ -385,6 +404,21 @@ const translations = {
     "macro.fat": "Fat",
     "macro.fiber": "Fiber",
     "macro.calories": "Calories",
+    "macro.proteinShort": "Protein",
+    "macro.carbsShort": "Carbs",
+    "macro.fatShort": "Fat",
+    "macro.fiberShort": "Fiber",
+
+    // Units
+    "unit.g": "g",
+    "unit.kg": "kg",
+    "unit.kcal": "kcal",
+    "unit.protein": "protein",
+    "unit.carbs": "carbs",
+    "unit.fat": "fat",
+    "unit.fiber": "fiber",
+    "unit.left": "left",
+    "unit.remaining": "remaining",
 
     // Common
     "common.deficit": "Deficit",
@@ -392,6 +426,10 @@ const translations = {
     "common.balance": "Balance",
     "common.dailyTarget": "Daily Target",
     "common.loading": "Loading...",
+    "common.protein": "Protein",
+    "common.carbs": "Carbs",
+    "common.fat": "Fat",
+    "common.fiber": "Fiber",
   },
 } as const;
 

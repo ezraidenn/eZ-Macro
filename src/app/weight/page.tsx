@@ -23,6 +23,7 @@ export default function WeightPage() {
   const weights = useStore((s) => s.weights);
   const addWeight = useStore((s) => s.addWeight);
   const profile = useStore((s) => s.profile);
+  const setProfile = useStore((s) => s.setProfile);
   const locale = useStore((s) => s.locale);
   const [inputWeight, setInputWeight] = useState(
     profile?.weight?.toString() ?? "75"
@@ -55,6 +56,11 @@ export default function WeightPage() {
       return;
     }
     addWeight(today, val);
+
+    // Update profile weight and recalculate TDEE/macros
+    if (profile) {
+      setProfile({ ...profile, weight: val });
+    }
 
     // Sync to DB
     try {
