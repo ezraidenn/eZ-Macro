@@ -27,8 +27,7 @@ function createPrismaClient() {
   } else {
     // Neon serverless adapter for production
     neonConfig.webSocketConstructor = ws;
-    const pool = new NeonPool({ connectionString });
-    const adapter = new PrismaNeon(pool);
+    const adapter = new PrismaNeon({ connectionString });
     
     return new PrismaClient({
       adapter,
