@@ -60,57 +60,10 @@ export default function LogPage() {
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null);
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       setImagePreview(dataUrl);
-      setMode("analyzing");
-
-      try {
-        const base64 = dataUrl.split(",")[1];
-        const res = await fetch("/api/analyze-food", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            imageBase64: base64,
-            userComment: userComment || undefined 
-          }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || "Analysis failed");
-        }
-
-        const data: AIFoodAnalysis = await res.json();
-        setAnalysis(data);
-
-        const mapped: MealFoodEntry[] = data.foods.map((f) => ({
-          id: uuid(),
-          food: {
-            id: uuid(),
-            name: f.name,
-            servingSize: f.estimatedGrams,
-            servingUnit: "g",
-            calories: f.calories,
-            protein: f.protein,
-            carbs: f.carbs,
-            fat: f.fat,
-            fiber: f.fiber,
-          },
-          servings: 1,
-          calories: f.calories,
-          protein: f.protein,
-          carbs: f.carbs,
-          fat: f.fat,
-          fiber: f.fiber,
-        }));
-
-        setFoods(mapped);
-        setMode("review");
-      } catch (err: any) {
-        setError(err.message || "Failed to analyze photo");
-        setMode("photo");
-      }
+      setMode("photo"); // Show photo mode with comment input BEFORE analyzing
     };
     reader.readAsDataURL(file);
   }, []);
@@ -283,6 +236,109 @@ export default function LogPage() {
             </motion.div>
           )}
 
+          {/* Mode: Photo (before analysis) */}
+          {mode === "photo" && (
+            <motion.div
+              key="photo"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="space-y-4"
+            >
+              {imagePreview && (
+                <div className="h-48 w-full rounded-2xl overflow-hidden">
+                  <img
+                    src={imagePreview}
+                    alt="Food"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+
+              {/* User Comment Input - BEFORE analysis */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">
+                  {t(locale, "log.addContext")}
+                </label>
+                <textarea
+                  value={userComment}
+                  onChange={(e) => setUserComment(e.target.value)}
+                  placeholder={t(locale, "log.contextPlaceholder")}
+                  className="input-field min-h-[60px] resize-none"
+                  rows={2}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setMode("select");
+                    setImagePreview(null);
+                    setUserComment("");
+                  }}
+                  className="flex-1 rounded-xl bg-secondary py-3 text-sm font-medium active:bg-secondary/80 transition-colors"
+                >
+                  {t(locale, "common.cancel")}
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!imagePreview) return;
+                    setMode("analyzing");
+                    setError(null);
+
+                    try {
+                      const base64 = imagePreview.split(",")[1];
+                      const res = await fetch("/api/analyze-food", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ 
+                          imageBase64: base64,
+                          userComment: userComment || undefined 
+                        }),
+                      });
+
+                      if (!res.ok) throw new Error("Analysis failed");
+
+                      const data: AIFoodAnalysis = await res.json();
+                      setAnalysis(data);
+                      
+                      const mapped: MealFoodEntry[] = data.foods.map((f) => ({
+                        id: uuid(),
+                        food: {
+                          id: uuid(),
+                          name: f.name,
+                          servingSize: f.estimatedGrams,
+                          servingUnit: "g",
+                          calories: f.calories,
+                          protein: f.protein,
+                          carbs: f.carbs,
+                          fat: f.fat,
+                          fiber: f.fiber,
+                        },
+                        servings: 1,
+                        calories: f.calories,
+                        protein: f.protein,
+                        carbs: f.carbs,
+                        fat: f.fat,
+                        fiber: f.fiber,
+                      }));
+                      
+                      setFoods(mapped);
+                      setMode("review");
+                    } catch (err) {
+                      setError("Error al analizar la imagen. Intenta de nuevo.");
+                      setMode("photo");
+                    }
+                  }}
+                  className="flex-1 rounded-xl bg-emerald-500 py-3 text-sm font-medium text-white active:bg-emerald-600 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {t(locale, "log.analyzePhoto")}
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {/* Mode: Analyzing */}
           {mode === "analyzing" && (
             <motion.div
@@ -336,20 +392,6 @@ export default function LogPage() {
                   />
                 </div>
               )}
-
-              {/* User Comment Input */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">
-                  {t(locale, "log.addContext")}
-                </label>
-                <textarea
-                  value={userComment}
-                  onChange={(e) => setUserComment(e.target.value)}
-                  placeholder={t(locale, "log.contextPlaceholder")}
-                  className="input-field min-h-[60px] resize-none"
-                  rows={2}
-                />
-              </div>
 
               {/* AI Notes */}
               {analysis?.notes && analysis.notes.length > 0 && (

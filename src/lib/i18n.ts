@@ -108,6 +108,8 @@ const translations = {
     "log.mealSaved": "Comida registrada exitosamente",
     "log.addContext": "Agregar contexto (opcional)",
     "log.contextPlaceholder": "Ej: un puñito de estas papas, medio plato, etc.",
+    "log.analyzePhoto": "Analizar Foto",
+    "common.cancel": "Cancelar",
 
     // Meal types
     "meal.breakfast": "Desayuno",
@@ -302,6 +304,8 @@ const translations = {
     "log.mealSaved": "Meal logged successfully",
     "log.addContext": "Add context (optional)",
     "log.contextPlaceholder": "E.g: a handful of these chips, half a plate, etc.",
+    "log.analyzePhoto": "Analyze Photo",
+    "common.cancel": "Cancel",
 
     // Meal types
     "meal.breakfast": "Breakfast",
