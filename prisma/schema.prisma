@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile      Profile?
+  mealEntries  MealEntry[]
+  weightEntries WeightEntry[]
+
+  @@map("users")
+}
+
+model Profile {
+  id            String @id @default(cuid())
+  userId        String @unique
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String
+  gender        String   @default("male")
+  age           Int      @default(25)
+  height        Float    @default(175)
+  weight        Float    @default(75)
+  activityLevel String   @default("moderate")
+  trainingLevel String   @default("intermediate")
+  goalType      String   @default("cut")
+
+  locale        String   @default("es")
+  theme         String   @default("dark")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model MealEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date       String
+  type       String
+  name       String
+  time       String
+  photoUrl   String?
+  aiAnalyzed Boolean  @default(false)
+  verified   Boolean  @default(true)
+
+  foods      FoodEntry[]
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId, date])
+  @@map("meal_entries")
+}
+
+model FoodEntry {
+  id          String    @id @default(cuid())
+  mealId      String
+  meal        MealEntry @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  name        String
+  servingSize Float
+  servingUnit String    @default("g")
+  servings    Float     @default(1)
+  calories    Float
+  protein     Float
+  carbs       Float
+  fat         Float
+  fiber       Float     @default(0)
+
+  @@map("food_entries")
+}
+
+model WeightEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date      String
+  weight    Float
+  movingAvg Float?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@map("weight_entries")
+}
