@@ -36,7 +36,7 @@ export default function DashboardPage() {
   const tdeeResult = useStore((s) => s.tdeeResult);
   const currentDate = useStore((s) => s.currentDate);
   const setCurrentDate = useStore((s) => s.setCurrentDate);
-  const getLogForDate = useStore((s) => s.getLogForDate);
+  const dayLogs = useStore((s) => s.dayLogs);
   const removeMeal = useStore((s) => s.removeMeal);
   const weights = useStore((s) => s.weights);
   const onboarded = useStore((s) => s.onboarded);
@@ -53,7 +53,7 @@ export default function DashboardPage() {
 
   if (!profile || !targets) return null;
 
-  const log = getLogForDate(currentDate);
+  const log = dayLogs[currentDate] ?? { date: currentDate, meals: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 } };
   const totals = log.totals;
   const today = formatDateKey(new Date());
   const isToday = currentDate === today;

@@ -8,11 +8,19 @@ export default function Home() {
   const router = useRouter();
   const userId = useStore((s) => s.userId);
   const setUserId = useStore((s) => s.setUserId);
-  const onboarded = useStore((s) => s.onboarded);
+  const profile = useStore((s) => s.profile);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     async function checkAuth() {
+      // If user is already in store (from persistence), redirect immediately
+      if (userId && profile) {
+        router.replace("/dashboard");
+        setChecking(false);
+        return;
+      }
+
+      // Otherwise check with server
       try {
         const res = await fetch("/api/auth/me");
         const data = await res.json();
@@ -29,15 +37,20 @@ export default function Home() {
           router.replace("/auth");
         }
       } catch {
-        setUserId(null);
-        router.replace("/auth");
+        // On error, check if we have stored session
+        if (userId) {
+          router.replace("/dashboard");
+        } else {
+          setUserId(null);
+          router.replace("/auth");
+        }
       } finally {
         setChecking(false);
       }
     }
 
     checkAuth();
-  }, [router, setUserId]);
+  }, [router, setUserId, userId, profile]);
 
   return (
     <div className="flex min-h-dvh items-center justify-center">
