@@ -30,6 +30,7 @@ import {
   Minus,
   AlertCircle,
   Sparkles,
+  ImagePlus,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useStore as useAppStore } from "@/lib/store";
@@ -50,7 +51,7 @@ export default function LogPage() {
 
   const [mealType, setMealType] = useState<MealType>("lunch");
   const [mode, setMode] = useState<"select" | "photo" | "analyzing" | "review">("select");
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [analysis, setAnalysis] = useState<AIFoodAnalysis | null>(null);
   const [foods, setFoods] = useState<MealFoodEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -83,12 +84,33 @@ export default function LogPage() {
     setError(null);
     try {
       const compressed = await compressImage(file);
-      setImagePreview(compressed);
+      setImagePreviews((prev) => [...prev.slice(0, 2), compressed]);
       setMode("photo");
     } catch {
       setError("Error al cargar la imagen");
     }
   }, [compressImage]);
+
+  const addMorePhotos = useCallback(() => {
+    if (imagePreviews.length >= 3) return;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        try {
+          const compressed = await compressImage(file);
+          setImagePreviews((prev) => [...prev.slice(0, 2), compressed]);
+        } catch {}
+      }
+    };
+    input.click();
+  }, [imagePreviews.length, compressImage]);
+
+  const removePhoto = useCallback((index: number) => {
+    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   function adjustServing(index: number, delta: number) {
     setFoods((prev) =>
@@ -123,7 +145,7 @@ export default function LogPage() {
       name: MEAL_LABELS[mealType],
       time: `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`,
       foods,
-      photoUrl: imagePreview ?? undefined,
+      photoUrl: imagePreviews[0] ?? undefined,
       aiAnalyzed: !!analysis,
       verified: true,
     };
@@ -267,15 +289,29 @@ export default function LogPage() {
               exit={{ opacity: 0, y: -12 }}
               className="space-y-4"
             >
-              {imagePreview && (
-                <div className="h-48 w-full rounded-2xl overflow-hidden">
-                  <img
-                    src={imagePreview}
-                    alt="Food"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              )}
+              {/* Photo Grid */}
+              <div className="flex gap-2">
+                {imagePreviews.map((img, i) => (
+                  <div key={i} className="relative flex-1 h-36 rounded-xl overflow-hidden">
+                    <img src={img} alt={`Food ${i + 1}`} className="h-full w-full object-cover" />
+                    <button
+                      onClick={() => removePhoto(i)}
+                      className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {imagePreviews.length < 3 && (
+                  <button
+                    onClick={addMorePhotos}
+                    className="flex-1 h-36 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 text-muted-foreground active:bg-secondary/50"
+                  >
+                    <ImagePlus className="h-5 w-5" />
+                    <span className="text-[10px]">{imagePreviews.length}/3</span>
+                  </button>
+                )}
+              </div>
 
               {/* User Comment Input - BEFORE analysis */}
               <div className="space-y-2">
@@ -295,7 +331,7 @@ export default function LogPage() {
                 <button
                   onClick={() => {
                     setMode("select");
-                    setImagePreview(null);
+                    setImagePreviews([]);
                     setUserComment("");
                   }}
                   className="flex-1 rounded-xl bg-secondary py-3 text-sm font-medium active:bg-secondary/80 transition-colors"
@@ -304,17 +340,16 @@ export default function LogPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    if (!imagePreview) return;
+                    if (imagePreviews.length === 0) return;
                     setMode("analyzing");
                     setError(null);
 
                     try {
-                      const base64 = imagePreview.split(",")[1];
                       const res = await fetch("/api/analyze-food", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ 
-                          imageBase64: base64,
+                          images: imagePreviews,
                           userComment: userComment || undefined 
                         }),
                       });
@@ -375,13 +410,13 @@ export default function LogPage() {
               exit={{ opacity: 0 }}
               className="flex flex-col items-center justify-center py-16 space-y-4"
             >
-              {imagePreview && (
-                <div className="h-32 w-32 rounded-2xl overflow-hidden">
-                  <img
-                    src={imagePreview}
-                    alt="Food"
-                    className="h-full w-full object-cover"
-                  />
+              {imagePreviews.length > 0 && (
+                <div className="flex gap-2">
+                  {imagePreviews.map((img, i) => (
+                    <div key={i} className="h-20 w-20 rounded-xl overflow-hidden">
+                      <img src={img} alt={`Food ${i + 1}`} className="h-full w-full object-cover" />
+                    </div>
+                  ))}
                 </div>
               )}
               <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
@@ -410,13 +445,13 @@ export default function LogPage() {
                 </div>
               )}
 
-              {imagePreview && (
-                <div className="h-40 w-full rounded-2xl overflow-hidden">
-                  <img
-                    src={imagePreview}
-                    alt="Food"
-                    className="h-full w-full object-cover"
-                  />
+              {imagePreviews.length > 0 && (
+                <div className="flex gap-2">
+                  {imagePreviews.map((img, i) => (
+                    <div key={i} className="h-28 flex-1 rounded-xl overflow-hidden">
+                      <img src={img} alt={`Food ${i + 1}`} className="h-full w-full object-cover" />
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -524,7 +559,7 @@ export default function LogPage() {
                 <button
                   onClick={() => {
                     setMode("select");
-                    setImagePreview(null);
+                    setImagePreviews([]);
                     setAnalysis(null);
                     setFoods([]);
                     setError(null);

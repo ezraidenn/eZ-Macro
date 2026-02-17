@@ -39,31 +39,53 @@ Rules:
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageBase64, imageUrl, userComment } = await req.json();
+    const { imageBase64, imageUrl, images, userComment } = await req.json();
 
-    if (!imageBase64 && !imageUrl) {
+    // Support multiple images (up to 3) or single image
+    const imageContents: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [];
+
+    if (images && Array.isArray(images) && images.length > 0) {
+      // Multi-image mode
+      for (const img of images.slice(0, 3)) {
+        imageContents.push({
+          type: "image_url",
+          image_url: {
+            url: img.startsWith("data:") ? img : `data:image/jpeg;base64,${img}`,
+            detail: "high",
+          },
+        });
+      }
+    } else if (imageBase64) {
+      imageContents.push({
+        type: "image_url",
+        image_url: {
+          url: `data:image/jpeg;base64,${imageBase64}`,
+          detail: "high",
+        },
+      });
+    } else if (imageUrl) {
+      imageContents.push({
+        type: "image_url",
+        image_url: { url: imageUrl, detail: "high" },
+      });
+    }
+
+    if (imageContents.length === 0) {
       return NextResponse.json(
         { error: "No image provided" },
         { status: 400 }
       );
     }
 
-    const imageContent: OpenAI.Chat.Completions.ChatCompletionContentPart = imageBase64
-      ? {
-          type: "image_url",
-          image_url: {
-            url: `data:image/jpeg;base64,${imageBase64}`,
-            detail: "high",
-          },
-        }
-      : {
-          type: "image_url",
-          image_url: { url: imageUrl, detail: "high" },
-        };
-
-    const userPrompt = userComment
-      ? `Analyze this food photo. User context: "${userComment}". Use this context to better estimate portions. Return nutritional breakdown as JSON.`
-      : "Analyze this food photo. Return nutritional breakdown as JSON.";
+    const photoCount = imageContents.length;
+    let userPrompt = photoCount > 1
+      ? `Analyze these ${photoCount} food photos together as a single meal. They show different angles or items of the same meal.`
+      : "Analyze this food photo.";
+    
+    if (userComment) {
+      userPrompt += ` User context: "${userComment}". Use this context to better estimate portions.`;
+    }
+    userPrompt += " Return nutritional breakdown as JSON.";
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -73,7 +95,7 @@ export async function POST(req: NextRequest) {
           role: "user",
           content: [
             { type: "text", text: userPrompt },
-            imageContent,
+            ...imageContents,
           ],
         },
       ],

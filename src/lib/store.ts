@@ -11,6 +11,7 @@ import {
   type WeightEntry,
   type MealType,
   type MacroTotals,
+  type SavedShake,
 } from "./types";
 import { calculateFullTDEE } from "./calculations";
 import { formatDateKey, movingAverage } from "./utils";
@@ -50,6 +51,11 @@ interface AppState {
   weights: WeightEntry[];
   addWeight: (date: string, weight: number) => void;
   getWeightTrend: () => WeightEntry[];
+
+  // Saved Shakes
+  savedShakes: SavedShake[];
+  addShake: (shake: SavedShake) => void;
+  removeShake: (id: string) => void;
 
   // Current date view
   currentDate: string;
@@ -176,6 +182,14 @@ export const useStore = create<AppState>()(
         });
       },
       getWeightTrend: () => get().weights,
+
+      savedShakes: [],
+      addShake: (shake) => {
+        set((state) => ({ savedShakes: [...state.savedShakes, shake] }));
+      },
+      removeShake: (id) => {
+        set((state) => ({ savedShakes: state.savedShakes.filter((s) => s.id !== id) }));
+      },
 
       currentDate: formatDateKey(new Date()),
       setCurrentDate: (d) => set({ currentDate: d }),

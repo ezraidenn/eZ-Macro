@@ -25,6 +25,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
+  Lightbulb,
+  Zap,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -205,6 +207,37 @@ export default function DashboardPage() {
               color="text-red-400"
             />
           </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={() => router.push("/recommendations")}
+            className="flex flex-col items-center gap-1.5 rounded-xl bg-amber-500/10 p-3 active:bg-amber-500/15 transition-colors"
+          >
+            <Lightbulb className="h-5 w-5 text-amber-400" />
+            <span className="text-[10px] font-medium text-amber-400">
+              {locale === "es" ? "Sugerencias" : "Suggestions"}
+            </span>
+          </button>
+          <button
+            onClick={() => router.push("/shakes")}
+            className="flex flex-col items-center gap-1.5 rounded-xl bg-violet-500/10 p-3 active:bg-violet-500/15 transition-colors"
+          >
+            <Zap className="h-5 w-5 text-violet-400" />
+            <span className="text-[10px] font-medium text-violet-400">
+              {locale === "es" ? "Batidos" : "Shakes"}
+            </span>
+          </button>
+          <button
+            onClick={() => router.push("/log")}
+            className="flex flex-col items-center gap-1.5 rounded-xl bg-emerald-500/10 p-3 active:bg-emerald-500/15 transition-colors"
+          >
+            <Plus className="h-5 w-5 text-emerald-400" />
+            <span className="text-[10px] font-medium text-emerald-400">
+              {locale === "es" ? "Registrar" : "Log Meal"}
+            </span>
+          </button>
         </div>
 
         {/* Meals */}

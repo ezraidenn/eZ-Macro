@@ -117,6 +117,19 @@ export interface AIFoodAnalysis {
   notes: string[];
 }
 
+export interface SavedShake {
+  id: string;
+  name: string;
+  description: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  photoUrl?: string;
+  createdAt: string;
+}
+
 export interface WeeklyMetrics {
   weekStart: string;
   avgCalories: number;
