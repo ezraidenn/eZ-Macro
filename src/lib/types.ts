@@ -103,18 +103,25 @@ export interface AIFoodAnalysis {
     name: string;
     quantity: string;
     estimatedGrams: number;
+    gramsRange?: { min: number; max: number };
+    visualCues?: string;
     confidence: "low" | "medium" | "high";
     calories: number;
     protein: number;
     carbs: number;
     fat: number;
     fiber: number;
+    caloriesRange?: { min: number; max: number };
   }[];
   totalCalories: number;
   totalProtein: number;
   totalCarbs: number;
   totalFat: number;
+  totalFiber?: number;
+  referenceObjectFound?: string;
+  overallConfidence?: "low" | "medium" | "high";
   notes: string[];
+  energyCheck?: string;
 }
 
 export interface SavedShake {

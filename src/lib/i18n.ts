@@ -107,7 +107,7 @@ const translations = {
     "log.saveMeal": "Guardar Comida",
     "log.mealSaved": "Comida registrada exitosamente",
     "log.addContext": "Agregar contexto (opcional)",
-    "log.contextPlaceholder": "Ej: un puñito de estas papas, medio plato, etc.",
+    "log.contextPlaceholder": "💡 Para mayor precisión, incluye una referencia: lata de refresco, tarjeta INE, tu mano abierta, o cubiertos. También describe porciones: 'medio plato', '6 tortillas', 'con piel', etc.",
     "log.analyzePhoto": "Analizar Foto",
     "common.cancel": "Cancelar",
 
@@ -322,7 +322,7 @@ const translations = {
     "log.saveMeal": "Save Meal",
     "log.mealSaved": "Meal logged successfully",
     "log.addContext": "Add context (optional)",
-    "log.contextPlaceholder": "E.g: a handful of these chips, half a plate, etc.",
+    "log.contextPlaceholder": "💡 For better accuracy, include a reference: soda can, credit card, your open hand, or utensils. Also describe portions: 'half plate', '6 tortillas', 'with skin', etc.",
     "log.analyzePhoto": "Analyze Photo",
     "common.cancel": "Cancel",
 
