@@ -107,11 +107,27 @@ Ejemplo: Si estimaste 300g pollo con piel = 87g proteína
 → 87g ÷ 300g = 29g/100g ✓ (correcto, dentro del límite)
 → Si hubiera dado 97g proteína = 32g/100g ✗ (imposible, ajustar a 87g máximo)
 
-PASO 6: CÁLCULO DE TOTALES Y VERIFICACIÓN
-Suma todos los items y verifica:
-- Total kcal ≈ (Proteína × 4) + (Carbohidratos × 4) + (Grasa × 9)
-- Si la diferencia es >10%, revisa GRASA primero (aceite oculto, piel, fritura)
-- Si proteína total parece alta, revisa PASO 5
+PASO 6: CÁLCULO DE TOTALES Y VERIFICACIÓN (OBLIGATORIO)
+Para CADA alimento, calcula calorías usando LA FÓRMULA EXACTA:
+calories = (protein × 4) + (carbs × 4) + (fat × 9)
+
+NUNCA uses valores de calorías de memoria o tablas directamente.
+SIEMPRE calcula desde los macros.
+
+Ejemplo correcto:
+- Pollo 300g: P87g, C0g, F24g
+- Calorías = (87×4) + (0×4) + (24×9) = 348 + 0 + 216 = 564 kcal ✓
+
+Ejemplo INCORRECTO:
+- Pollo 300g: P87g, C0g, F24g, calorías 450 kcal ✗
+- Verificación: (87×4) + (0×4) + (24×9) = 564 kcal
+- ERROR: 450 ≠ 564 (diferencia 20%)
+
+Después de calcular cada item:
+1. Suma todos los macros: totalProtein, totalCarbs, totalFat
+2. Calcula totalCalories = (totalProtein × 4) + (totalCarbs × 4) + (totalFat × 9)
+3. Verifica que la suma de calorías individuales ≈ totalCalories (±2%)
+4. Si hay diferencia >2%, recalcula TODO desde cero
 
 PASO 7: ESCENARIOS A/B (si hay ambigüedad crítica)
 Si detectas incertidumbre en elementos clave (piel sí/no, fritura sí/no, porción grande/pequeña):
@@ -186,10 +202,14 @@ REGLAS CRÍTICAS:
 10. Bebidas: incluir (coca zero = 0 kcal, coca regular 355ml = 140 kcal)
 11. **PROTEÍNA: Usa valores conservadores. Si calculas >30g proteína/100g en pollo, REDUCE el peso estimado o ajusta a 29g/100g máximo**
 12. **VALIDACIÓN FINAL: Proteína total ÷ peso total de proteínas animales debe dar ≤30g/100g. Si no, recalcula.**
+13. **CALORÍAS = FÓRMULA OBLIGATORIA: Para CADA alimento, calories DEBE ser exactamente (protein×4 + carbs×4 + fat×9). NO uses valores de tablas.**
+14. **VERIFICACIÓN MATEMÁTICA: Antes de enviar el JSON, verifica que CADA item cumple: |calories - (P×4+C×4+F×9)| < 5 kcal**
 
 OBJETIVO: Precisión realista, no optimismo fitness. Mejor sobrestimar 10% que subestimar 30%.
 
-⚠️ ATENCIÓN ESPECIAL: La proteína es fácil de sobreestimar. Sé conservador con los pesos de carne/pollo/pescado.`;
+⚠️ ATENCIÓN ESPECIAL: 
+- La proteína es fácil de sobreestimar. Sé conservador con los pesos de carne/pollo/pescado.
+- Las calorías DEBEN calcularse desde macros, NUNCA desde memoria. Inconsistencias matemáticas son inaceptables.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -269,6 +289,73 @@ export async function POST(req: NextRequest) {
         { error: "Failed to parse AI response", raw: content },
         { status: 500 }
       );
+    }
+
+    // CRITICAL: Validate and auto-correct calorie-macro consistency
+    // Formula: kcal = (protein × 4) + (carbs × 4) + (fat × 9)
+    const validateAndCorrectCalories = (item: any) => {
+      const calculatedKcal = Math.round(
+        (item.protein * 4) + (item.carbs * 4) + (item.fat * 9)
+      );
+      const reportedKcal = item.calories;
+      const difference = Math.abs(calculatedKcal - reportedKcal);
+      const percentDiff = (difference / calculatedKcal) * 100;
+
+      // If difference > 8%, auto-correct to calculated value
+      if (percentDiff > 8) {
+        console.warn(`Calorie mismatch detected: Reported ${reportedKcal} kcal, Calculated ${calculatedKcal} kcal (${percentDiff.toFixed(1)}% diff)`);
+        item.calories = calculatedKcal;
+        
+        // Add note about correction
+        if (!parsed.notes) parsed.notes = [];
+        parsed.notes.push(
+          `⚠️ Calorías auto-corregidas: ${reportedKcal} → ${calculatedKcal} kcal (diferencia ${percentDiff.toFixed(1)}%)`
+        );
+      }
+
+      return item;
+    };
+
+    // Validate each food item
+    if (parsed.foods && Array.isArray(parsed.foods)) {
+      parsed.foods = parsed.foods.map(validateAndCorrectCalories);
+    }
+
+    // Recalculate totals based on corrected individual items
+    if (parsed.foods && Array.isArray(parsed.foods)) {
+      const totals = parsed.foods.reduce((acc: any, food: any) => ({
+        calories: acc.calories + food.calories,
+        protein: acc.protein + food.protein,
+        carbs: acc.carbs + food.carbs,
+        fat: acc.fat + food.fat,
+        fiber: acc.fiber + (food.fiber || 0),
+      }), { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+
+      // Validate total calories
+      const calculatedTotalKcal = Math.round(
+        (totals.protein * 4) + (totals.carbs * 4) + (totals.fat * 9)
+      );
+      const reportedTotalKcal = parsed.totalCalories || totals.calories;
+      const totalDifference = Math.abs(calculatedTotalKcal - reportedTotalKcal);
+      const totalPercentDiff = (totalDifference / calculatedTotalKcal) * 100;
+
+      if (totalPercentDiff > 8) {
+        console.warn(`Total calorie mismatch: Reported ${reportedTotalKcal} kcal, Calculated ${calculatedTotalKcal} kcal`);
+        if (!parsed.notes) parsed.notes = [];
+        parsed.notes.push(
+          `⚠️ Total calorías corregido: ${reportedTotalKcal} → ${calculatedTotalKcal} kcal`
+        );
+      }
+
+      // Update totals with corrected values
+      parsed.totalCalories = calculatedTotalKcal;
+      parsed.totalProtein = Math.round(totals.protein);
+      parsed.totalCarbs = Math.round(totals.carbs);
+      parsed.totalFat = Math.round(totals.fat);
+      parsed.totalFiber = Math.round(totals.fiber);
+
+      // Add energy check verification
+      parsed.energyCheck = `Verificación: ${calculatedTotalKcal} kcal = (${parsed.totalProtein}×4 + ${parsed.totalCarbs}×4 + ${parsed.totalFat}×9) ✓`;
     }
 
     return NextResponse.json(parsed);
