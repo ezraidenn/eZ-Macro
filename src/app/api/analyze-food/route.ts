@@ -34,6 +34,20 @@ Para CADA alimento visible, documenta:
   * Método de cocción (asado, frito, hervido, al vapor)
 - Porción relativa al plato o referencia (ej: "ocupa 1/3 del plato", "equivale a 2 palmas")
 
+**CLASIFICACIÓN ESPECIAL PARA POLLO/CARNE CON HUESO:**
+Si detectas pollo/carne, clasifica el tipo de corte:
+- cut_type: "breast" (pechuga), "leg_thigh" (muslo/pierna), "mixed_quarter" (cuarto mixto), "wings" (alitas), "unknown"
+- bone_visible: true/false (¿se ve hueso claramente?)
+- skin_visible: true/false (¿hay piel/brillo de grasa?)
+
+Heurísticas visuales:
+- Hueso largo + forma alargada → "leg_thigh" o "mixed_quarter"
+- Bloque blanco uniforme sin hueso → "breast"
+- Pieza grande con hueso + múltiples partes → "mixed_quarter"
+- Piezas pequeñas con hueso → "wings"
+
+Describe en 1 frase la evidencia visual (ej: "hueso visible en forma de muslo, piel dorada con brillo")
+
 PASO 3: ESTIMACIÓN DE PORCIONES (CRÍTICO)
 Para cada item:
 - Peso estimado CENTRAL en gramos (tu mejor estimación)
@@ -52,11 +66,32 @@ GUÍA DE PORCIONES ESTÁNDAR MÉXICO:
 PASO 4: CÁLCULO DE MACROS POR ITEM
 Usa valores de composición REALISTAS (no optimistas):
 
-PROTEÍNAS ANIMALES (por 100g cocido):
-- Pechuga pollo SIN piel: 165 kcal, P31g, G3.6g, C0g, fibra 0g
-- Pechuga pollo CON piel: 195 kcal, P29g, G8g, C0g, fibra 0g
-- Muslo/pierna CON piel: 245 kcal, P24g, G16g, C0g, fibra 0g
+PROTEÍNAS ANIMALES (por 100g COMESTIBLE cocido):
+
+**POLLO - FACTORES DE PESO COMESTIBLE:**
+Si hay hueso visible, aplica factor de conversión PRIMERO:
+- Pechuga con hueso: peso_comestible = peso_total × 0.75
+- Muslo/pierna con hueso: peso_comestible = peso_total × 0.70
+- Cuarto mixto con hueso: peso_comestible = peso_total × 0.65
+- Alitas con hueso: peso_comestible = peso_total × 0.55
+- Sin hueso visible: peso_comestible = peso_total × 0.95
+
+**MACROS POR 100g COMESTIBLE:**
+- Pechuga SIN piel: 165 kcal, P31g, G3.6g, C0g, fibra 0g
+- Pechuga CON piel: 195 kcal, P29g, G8g, C0g, fibra 0g
+- Muslo/pierna CON piel: 215 kcal, P24g, G13g, C0g, fibra 0g
 - Muslo/pierna SIN piel: 180 kcal, P26g, G8g, C0g, fibra 0g
+- Cuarto mixto CON piel: 230 kcal, P24g, G15g, C0g, fibra 0g (DEFAULT para mixed_quarter)
+- Alitas con piel: 240 kcal, P23g, G16g, C0g, fibra 0g
+
+**LÍMITES DE PROTEÍNA POR TIPO:**
+- breast sin hueso: MAX 31g/100g comestible
+- breast con hueso: MAX 29g/100g comestible
+- leg_thigh: MAX 24-26g/100g comestible
+- mixed_quarter: MAX 24-25g/100g comestible
+- wings: MAX 23g/100g comestible
+
+**OTRAS PROTEÍNAS:**
 - Carne res molida 80/20: 250 kcal, P26g, G17g, C0g
 - Carne res molida 90/10: 180 kcal, P26g, G8g, C0g
 - Pescado blanco: 110 kcal, P23g, G2g, C0g
@@ -168,7 +203,14 @@ FORMATO DE SALIDA (JSON válido, sin markdown):
       "carbs": 12,
       "fat": 28,
       "fiber": 2,
-      "caloriesRange": {"min": 380, "max": 520}
+      "caloriesRange": {"min": 380, "max": 520},
+      "chickenClassification": {
+        "cutType": "breast|leg_thigh|mixed_quarter|wings|unknown|null",
+        "boneVisible": true,
+        "skinVisible": true,
+        "edibleWeightFactor": 0.65,
+        "edibleGrams": 130
+      }
     }
   ],
   "totalCalories": 450,
