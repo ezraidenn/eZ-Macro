@@ -91,15 +91,48 @@ AJUSTES POR MÉTODO DE COCCIÓN:
 - Asado/parrilla: sin ajuste (grasa se derrite)
 - Al vapor/hervido: sin ajuste
 
-PASO 5: CÁLCULO DE TOTALES
+PASO 5: VALIDACIÓN DE PROTEÍNA (CRÍTICO)
+Verifica que la proteína no exceda límites biológicos:
+- Pollo/pavo: MAX 31g proteína por 100g (sin piel), 29g (con piel)
+- Carne res: MAX 26-28g proteína por 100g
+- Pescado: MAX 23-25g proteína por 100g
+- Huevo: MAX 13g proteína por 100g
+
+Si tu estimación de proteína supera estos valores:
+1. Recalcula el peso del alimento (probablemente sobrestimado)
+2. O reduce el % de proteína al máximo biológico
+3. Reporta en "notes" el ajuste realizado
+
+Ejemplo: Si estimaste 300g pollo con piel = 87g proteína
+→ 87g ÷ 300g = 29g/100g ✓ (correcto, dentro del límite)
+→ Si hubiera dado 97g proteína = 32g/100g ✗ (imposible, ajustar a 87g máximo)
+
+PASO 6: CÁLCULO DE TOTALES Y VERIFICACIÓN
 Suma todos los items y verifica:
 - Total kcal ≈ (Proteína × 4) + (Carbohidratos × 4) + (Grasa × 9)
 - Si la diferencia es >10%, revisa GRASA primero (aceite oculto, piel, fritura)
+- Si proteína total parece alta, revisa PASO 5
 
-PASO 6: NIVEL DE CONFIANZA
-- ALTA: referencia de escala clara + alimentos simples identificables
-- MEDIA: sin referencia pero porciones típicas + alimentos reconocibles
-- BAJA: sin referencia + alimentos complejos/mixtos + aceite no visible
+PASO 7: ESCENARIOS A/B (si hay ambigüedad crítica)
+Si detectas incertidumbre en elementos clave (piel sí/no, fritura sí/no, porción grande/pequeña):
+Reporta 2 escenarios en "notes":
+
+Ejemplo 1 - Piel ambigua:
+- "Escenario A (más probable): Pollo CON piel = 585 kcal (195 kcal/100g × 300g)"
+- "Escenario B (si fuera sin piel): Pollo SIN piel = 495 kcal (165 kcal/100g × 300g)"
+- Diferencia: 90 kcal
+
+Ejemplo 2 - Aceite visible:
+- "Escenario A (con aceite visible): Total 920 kcal (incluye ~2 cdas aceite = 240 kcal)"
+- "Escenario B (sin aceite extra): Total 680 kcal"
+- Diferencia: 240 kcal
+
+Usa SIEMPRE el escenario A (más probable) para los valores principales del JSON.
+
+PASO 8: NIVEL DE CONFIANZA
+- ALTA: referencia de escala clara + alimentos simples identificables + sin ambigüedad
+- MEDIA: sin referencia pero porciones típicas + alimentos reconocibles + poca ambigüedad
+- BAJA: sin referencia + alimentos complejos/mixtos + aceite no visible + alta ambigüedad
 
 ═══════════════════════════════════════════════════════════════════════════════
 FORMATO DE SALIDA (JSON válido, sin markdown):
@@ -151,8 +184,12 @@ REGLAS CRÍTICAS:
 8. Todos los números deben ser enteros (redondear)
 9. Fibra: solo en vegetales, leguminosas, granos enteros, frutas
 10. Bebidas: incluir (coca zero = 0 kcal, coca regular 355ml = 140 kcal)
+11. **PROTEÍNA: Usa valores conservadores. Si calculas >30g proteína/100g en pollo, REDUCE el peso estimado o ajusta a 29g/100g máximo**
+12. **VALIDACIÓN FINAL: Proteína total ÷ peso total de proteínas animales debe dar ≤30g/100g. Si no, recalcula.**
 
-OBJETIVO: Precisión realista, no optimismo fitness. Mejor sobrestimar 10% que subestimar 30%.`;
+OBJETIVO: Precisión realista, no optimismo fitness. Mejor sobrestimar 10% que subestimar 30%.
+
+⚠️ ATENCIÓN ESPECIAL: La proteína es fácil de sobreestimar. Sé conservador con los pesos de carne/pollo/pescado.`;
 
 export async function POST(req: NextRequest) {
   try {
