@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
       { name: "protein", value: remaining.protein, selected: selectedPriorities.includes("protein") },
       { name: "carbs", value: remaining.carbs, selected: selectedPriorities.includes("carbs") },
       { name: "fat", value: remaining.fat, selected: selectedPriorities.includes("fat") },
+      { name: "fiber", value: remaining.fiber || 0, selected: selectedPriorities.includes("fiber") },
     ].filter(m => m.selected).sort((a, b) => b.value - a.value);
 
     const highPriority = macroValues.slice(0, 2).map(m => m.name);
@@ -93,6 +94,7 @@ export async function POST(req: NextRequest) {
 - Protein: ${remaining.protein}g
 - Carbs: ${remaining.carbs}g
 - Fat: ${remaining.fat}g
+- Fiber: ${remaining.fiber || 0}g
 
 PRIORITY SELECTIONS (user chose these):
 HIGH priority: ${highPriority.join(", ")}
@@ -104,6 +106,7 @@ Suggested meal type: ${suggestedMeal}.
 
 Recommend 4 specific food options for their ${suggestedMeal} that MAXIMIZE the HIGH priority macros (${highPriority.join(", ")}).
 Each recommendation should provide substantial amounts of the HIGH priority macros.
+${selectedPriorities.includes("fiber") ? "IMPORTANT: Include fiber-rich foods (vegetables, legumes, whole grains, fruits) to help reach fiber goal." : ""}
 Respond in ${lang}. Food names and descriptions in ${lang}.`;
 
     const response = await openai.chat.completions.create({
