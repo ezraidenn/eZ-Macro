@@ -21,6 +21,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,7 +45,7 @@ export default function AuthPage() {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe: mode === "login" ? rememberMe : false }),
       });
 
       const data = await res.json();
@@ -202,6 +203,22 @@ export default function AuthPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Remember Me - Only for login */}
+          {mode === "login" && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-border bg-secondary text-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:ring-offset-0"
+              />
+              <label htmlFor="rememberMe" className="text-sm text-muted-foreground cursor-pointer">
+                {t(locale, "auth.rememberMe")}
+              </label>
+            </div>
+          )}
 
           <button
             type="submit"

@@ -5,7 +5,7 @@ import { createToken, tokenCookieOptions } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
+    const { email, password, rememberMe } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
@@ -20,13 +20,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    const token = await createToken(user.id);
+    const token = await createToken(user.id, rememberMe || false);
     const res = NextResponse.json({
       success: true,
       userId: user.id,
       hasProfile: !!user.profile,
     });
-    res.cookies.set(tokenCookieOptions(token));
+    res.cookies.set(tokenCookieOptions(token, rememberMe || false));
     return res;
   } catch (err: any) {
     console.error("Login error:", err);

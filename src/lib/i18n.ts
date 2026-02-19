@@ -17,9 +17,10 @@ const translations = {
     "auth.confirmPassword": "Confirmar contraseña",
     "auth.noAccount": "¿No tienes cuenta?",
     "auth.hasAccount": "¿Ya tienes cuenta?",
-    "auth.logout": "Cerrar Sesión",
+    "auth.rememberMe": "Mantener sesión abierta",
     "auth.welcome": "Bienvenido a eZMacro",
     "auth.subtitle": "Seguimiento nutricional con precisión científica",
+    "auth.logout": "Cerrar Sesión",
     "auth.loginError": "Correo o contraseña incorrectos",
     "auth.registerError": "Error al crear la cuenta",
     "auth.passwordMismatch": "Las contraseñas no coinciden",
@@ -240,6 +241,7 @@ const translations = {
     "auth.passwordMismatch": "Passwords don't match",
     "auth.emailRequired": "Email is required",
     "auth.passwordMin": "Minimum 6 characters",
+    "auth.rememberMe": "Remember me",
 
     // Onboarding
     "onboarding.title": "Let's get started",

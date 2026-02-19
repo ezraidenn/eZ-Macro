@@ -8,12 +8,19 @@ const SECRET = new TextEncoder().encode(
 const ALG = "HS256";
 const COOKIE_NAME = "ezmacro-token";
 
-export async function createToken(userId: string): Promise<string> {
-  return new SignJWT({ userId })
+export async function createToken(userId: string, rememberMe: boolean = false): Promise<string> {
+  const jwt = new SignJWT({ userId })
     .setProtectedHeader({ alg: ALG })
-    .setIssuedAt()
-    .setExpirationTime("30d")
-    .sign(SECRET);
+    .setIssuedAt();
+  
+  // If remember me, set expiration to 1 year, otherwise 30 days
+  if (rememberMe) {
+    jwt.setExpirationTime("365d");
+  } else {
+    jwt.setExpirationTime("30d");
+  }
+  
+  return jwt.sign(SECRET);
 }
 
 export async function verifyToken(token: string): Promise<{ userId: string } | null> {
@@ -32,7 +39,7 @@ export async function getSession(): Promise<{ userId: string } | null> {
   return verifyToken(token);
 }
 
-export function tokenCookieOptions(token: string) {
+export function tokenCookieOptions(token: string, rememberMe: boolean = false) {
   return {
     name: COOKIE_NAME,
     value: token,
@@ -40,7 +47,7 @@ export function tokenCookieOptions(token: string) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30, // 365 days if remember me, otherwise 30 days
   };
 }
 
