@@ -13,16 +13,22 @@ export default function Home() {
 
   useEffect(() => {
     async function checkAuth() {
-      // If user is already in store (from persistence), redirect immediately
-      if (userId && profile) {
-        router.replace("/dashboard");
+      // If user is already in store (from persistence), trust it and redirect immediately
+      if (userId) {
+        if (profile) {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/onboarding");
+        }
         setChecking(false);
         return;
       }
 
-      // Otherwise check with server
+      // Only check with server if no userId in store
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await fetch("/api/auth/me", {
+          credentials: 'include', // Ensure cookies are sent
+        });
         const data = await res.json();
         
         if (data.user) {
@@ -33,17 +39,15 @@ export default function Home() {
             router.replace("/onboarding");
           }
         } else {
+          // No valid session on server
           setUserId(null);
           router.replace("/auth");
         }
-      } catch {
-        // On error, check if we have stored session
-        if (userId) {
-          router.replace("/dashboard");
-        } else {
-          setUserId(null);
-          router.replace("/auth");
-        }
+      } catch (error) {
+        console.error("Auth check failed:", error);
+        // On network error, redirect to auth
+        setUserId(null);
+        router.replace("/auth");
       } finally {
         setChecking(false);
       }

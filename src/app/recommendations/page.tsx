@@ -75,6 +75,7 @@ export default function RecommendationsPage() {
         protein: Math.max(0, targets.protein - totals.protein),
         carbs: Math.max(0, targets.carbs - totals.carbs),
         fat: Math.max(0, targets.fat - totals.fat),
+        fiber: Math.max(0, 25 - totals.fiber), // Recommended daily fiber intake
       }
     : null;
 
@@ -213,15 +214,15 @@ export default function RecommendationsPage() {
               </p>
               <button
                 onClick={() => {
-                  if (priorities.length === 3) {
+                  if (priorities.length === 4) {
                     setPriorities([]);
                   } else {
-                    setPriorities(["protein", "carbs", "fat"]);
+                    setPriorities(["protein", "carbs", "fat", "fiber"]);
                   }
                 }}
                 className="text-[10px] font-medium text-emerald-400 active:text-emerald-300"
               >
-                {priorities.length === 3
+                {priorities.length === 4
                   ? (locale === "es" ? "Deseleccionar todos" : "Deselect all")
                   : (locale === "es" ? "Seleccionar todos" : "Select all")}
               </button>
@@ -232,6 +233,7 @@ export default function RecommendationsPage() {
                 { key: "protein", label: locale === "es" ? "Proteína" : "Protein", value: remaining.protein, color: "text-indigo-400" },
                 { key: "carbs", label: "Carbohidratos", value: remaining.carbs, color: "text-amber-400" },
                 { key: "fat", label: locale === "es" ? "Grasa" : "Fat", value: remaining.fat, color: "text-red-400" },
+                { key: "fiber", label: locale === "es" ? "Fibra" : "Fiber", value: remaining.fiber, color: "text-green-400" },
               ].map((macro) => (
                 <label
                   key={macro.key}

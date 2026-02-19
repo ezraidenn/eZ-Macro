@@ -40,6 +40,8 @@ export async function getSession(): Promise<{ userId: string } | null> {
 }
 
 export function tokenCookieOptions(token: string, rememberMe: boolean = false) {
+  const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30; // 365 days if remember me, otherwise 30 days
+  
   return {
     name: COOKIE_NAME,
     value: token,
@@ -47,7 +49,8 @@ export function tokenCookieOptions(token: string, rememberMe: boolean = false) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    maxAge: rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30, // 365 days if remember me, otherwise 30 days
+    maxAge,
+    expires: new Date(Date.now() + maxAge * 1000), // Explicit expiration date
   };
 }
 
