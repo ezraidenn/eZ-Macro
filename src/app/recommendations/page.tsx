@@ -64,6 +64,7 @@ export default function RecommendationsPage() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<RecommendationsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [priorities, setPriorities] = useState<string[]>(["protein", "carbs", "fat"]);
 
   const log = getLogForDate(currentDate);
   const totals = log.totals;
@@ -90,6 +91,7 @@ export default function RecommendationsPage() {
           remaining,
           mealsEaten: log.meals,
           locale,
+          priorities,
         }),
       });
 
@@ -143,11 +145,7 @@ export default function RecommendationsPage() {
     toast.success(locale === "es" ? "Comida agregada" : "Meal added");
   }
 
-  useEffect(() => {
-    if (remaining && !data && !loading) {
-      fetchRecommendations();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Removed auto-fetch - users must click Generate Recommendations button
 
   const MealIcon = MEAL_ICONS[data?.mealType || "snack"] || Cookie;
   const mealColor = MEAL_COLORS[data?.mealType || "snack"] || "text-violet-400 bg-violet-400/10";
@@ -203,6 +201,78 @@ export default function RecommendationsPage() {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Macro Priority Selection */}
+        {remaining && (
+          <div className="glass-card rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">
+                {locale === "es" ? "Priorizar en recomendaciones:" : "Prioritize in recommendations:"}
+              </p>
+              <button
+                onClick={() => {
+                  if (priorities.length === 3) {
+                    setPriorities([]);
+                  } else {
+                    setPriorities(["protein", "carbs", "fat"]);
+                  }
+                }}
+                className="text-[10px] font-medium text-emerald-400 active:text-emerald-300"
+              >
+                {priorities.length === 3
+                  ? (locale === "es" ? "Deseleccionar todos" : "Deselect all")
+                  : (locale === "es" ? "Seleccionar todos" : "Select all")}
+              </button>
+            </div>
+            
+            <div className="space-y-2">
+              {[
+                { key: "protein", label: locale === "es" ? "Proteína" : "Protein", value: remaining.protein, color: "text-indigo-400" },
+                { key: "carbs", label: "Carbohidratos", value: remaining.carbs, color: "text-amber-400" },
+                { key: "fat", label: locale === "es" ? "Grasa" : "Fat", value: remaining.fat, color: "text-red-400" },
+              ].map((macro) => (
+                <label
+                  key={macro.key}
+                  className="flex items-center gap-3 p-2 rounded-lg bg-secondary/50 active:bg-secondary cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={priorities.includes(macro.key)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setPriorities([...priorities, macro.key]);
+                      } else {
+                        setPriorities(priorities.filter(p => p !== macro.key));
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-border bg-background text-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:ring-offset-0"
+                  />
+                  <div className="flex-1 flex items-center justify-between">
+                    <span className="text-sm font-medium">{macro.label}</span>
+                    <span className={`text-sm font-bold tabular-nums ${macro.color}`}>
+                      {Math.round(macro.value)}g {locale === "es" ? "faltantes" : "remaining"}
+                    </span>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <button
+              onClick={fetchRecommendations}
+              disabled={loading || priorities.length === 0}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-semibold text-black transition-colors active:bg-emerald-600 disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  {locale === "es" ? "Generar Recomendaciones" : "Generate Recommendations"}
+                </>
+              )}
+            </button>
           </div>
         )}
 

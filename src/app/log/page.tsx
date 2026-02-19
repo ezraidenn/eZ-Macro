@@ -43,13 +43,22 @@ const MEAL_TYPE_OPTIONS: { type: MealType; icon: React.ElementType; color: strin
   { type: "snack", icon: Cookie, color: "text-violet-400 bg-violet-400/10" },
 ];
 
+// Helper function to determine meal type based on current hour
+function getMealTypeByTime(): MealType {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 11) return "breakfast";
+  if (hour >= 11 && hour < 16) return "lunch";
+  if (hour >= 16 && hour < 21) return "dinner";
+  return "snack";
+}
+
 export default function LogPage() {
   const router = useRouter();
   const addMeal = useStore((s) => s.addMeal);
   const currentDate = useStore((s) => s.currentDate);
   const locale = useStore((s) => s.locale);
 
-  const [mealType, setMealType] = useState<MealType>("lunch");
+  const [mealType, setMealType] = useState<MealType>(getMealTypeByTime());
   const [mode, setMode] = useState<"select" | "photo" | "analyzing" | "review">("select");
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [analysis, setAnalysis] = useState<AIFoodAnalysis | null>(null);
