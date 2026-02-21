@@ -39,13 +39,8 @@ export default function DashboardPage() {
   const dayLogs = useStore((s) => s.dayLogs);
   const removeMeal = useStore((s) => s.removeMeal);
   const weights = useStore((s) => s.weights);
-  const onboarded = useStore((s) => s.onboarded);
   const locale = useStore((s) => s.locale);
-  const userId = useStore((s) => s.userId);
 
-  // Auth check is handled by root page (/) - no need to check here
-  // This prevents logout on F5 when userId is temporarily undefined during hydration
-  
   if (!profile || !targets) return null;
 
   const log = dayLogs[currentDate] ?? { date: currentDate, meals: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 } };

@@ -348,7 +348,7 @@ export default function RecommendationsPage() {
                   </div>
 
                   {/* Macro Bars */}
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-5 gap-1.5">
                     <MacroBar
                       label="kcal"
                       value={rec.calories}
@@ -374,6 +374,13 @@ export default function RecommendationsPage() {
                       value={rec.fat}
                       max={remaining?.fat || 1}
                       color="bg-red-400"
+                      unit="g"
+                    />
+                    <MacroBar
+                      label={locale === "es" ? "fibra" : "fiber"}
+                      value={rec.fiber || 0}
+                      max={remaining?.fiber || 1}
+                      color="bg-green-400"
                       unit="g"
                     />
                   </div>

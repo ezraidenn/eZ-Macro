@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { useStore } from "@/lib/store";
+import { useStore, useAuthStore, switchUserStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { Zap, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,7 @@ import toast from "react-hot-toast";
 export default function AuthPage() {
   const router = useRouter();
   const locale = useStore((s) => s.locale);
-  const setUserId = useStore((s) => s.setUserId);
+  const setUserId = useAuthStore((s) => s.setUserId);
   const setOnboarded = useStore((s) => s.setOnboarded);
   const setProfile = useStore((s) => s.setProfile);
 
@@ -60,6 +60,7 @@ export default function AuthPage() {
       }
 
       setUserId(data.userId);
+      switchUserStore(data.userId);
 
       if (mode === "login" && data.hasProfile) {
         // Load profile from server

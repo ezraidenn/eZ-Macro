@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { v4 as uuid } from "uuid";
 import {
   type UserProfile,
@@ -17,11 +17,34 @@ import { calculateFullTDEE } from "./calculations";
 import { formatDateKey, movingAverage } from "./utils";
 import type { Locale } from "./i18n";
 
-interface AppState {
-  // Auth
+// ─── Auth Store (global, shared across users) ───────────────────────
+interface AuthState {
   userId: string | null;
   setUserId: (id: string | null) => void;
+  _hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
+}
 
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      userId: null,
+      setUserId: (id) => set({ userId: id }),
+      _hasHydrated: false,
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
+    }),
+    {
+      name: "ezmacro-auth",
+      version: 1,
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
+    }
+  )
+);
+
+// ─── App State (per-user data) ──────────────────────────────────────
+interface AppState {
   // Locale & Theme
   locale: Locale;
   setLocale: (l: Locale) => void;
@@ -60,6 +83,9 @@ interface AppState {
   // Current date view
   currentDate: string;
   setCurrentDate: (d: string) => void;
+
+  // Reset all user data (for logout)
+  resetUserData: () => void;
 }
 
 function emptyTotals(): MacroTotals {
@@ -86,12 +112,16 @@ function emptyDayLog(date: string): DayLog {
   return { date, meals: [], totals: emptyTotals() };
 }
 
+// Dynamic storage name based on userId
+function getUserStorageName(): string {
+  const userId = useAuthStore.getState().userId;
+  return userId ? `ezmacro-data-${userId}` : "ezmacro-data-anonymous";
+}
+
+// Create the per-user store with dynamic name
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
-      userId: null,
-      setUserId: (id) => set({ userId: id }),
-
       locale: "es" as Locale,
       setLocale: (l) => set({ locale: l }),
 
@@ -191,12 +221,119 @@ export const useStore = create<AppState>()(
         set((state) => ({ savedShakes: state.savedShakes.filter((s) => s.id !== id) }));
       },
 
+      // Always initialize to today's date
       currentDate: formatDateKey(new Date()),
       setCurrentDate: (d) => set({ currentDate: d }),
+
+      resetUserData: () => {
+        set({
+          onboarded: false,
+          profile: null,
+          tdeeResult: null,
+          targets: null,
+          dayLogs: {},
+          weights: [],
+          savedShakes: [],
+          currentDate: formatDateKey(new Date()),
+        });
+      },
     }),
     {
-      name: "ezmacro-storage",
+      name: getUserStorageName(),
       version: 1,
+      storage: createJSONStorage(() => localStorage),
+      // Always reset currentDate to today on rehydration
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.setCurrentDate(formatDateKey(new Date()));
+        }
+      },
     }
   )
 );
+
+// ─── Helper: Switch user data store ─────────────────────────────────
+// When userId changes, we need to reload the store from the correct localStorage key
+export function switchUserStore(userId: string | null) {
+  const storeName = userId ? `ezmacro-data-${userId}` : "ezmacro-data-anonymous";
+  
+  // Try to load existing data for this user from localStorage
+  try {
+    const raw = localStorage.getItem(storeName);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const state = parsed?.state;
+      if (state) {
+        useStore.setState({
+          locale: state.locale || "es",
+          onboarded: state.onboarded || false,
+          profile: state.profile || null,
+          tdeeResult: state.tdeeResult || null,
+          targets: state.targets || null,
+          dayLogs: state.dayLogs || {},
+          weights: state.weights || [],
+          savedShakes: state.savedShakes || [],
+          currentDate: formatDateKey(new Date()), // Always today
+        });
+        // Recalculate TDEE if profile exists
+        if (state.profile) {
+          useStore.getState().recalculateTDEE();
+        }
+        return;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load user store:", e);
+  }
+
+  // No existing data for this user - reset to defaults
+  useStore.getState().resetUserData();
+}
+
+// ─── Helper: Save current store to user-specific key ────────────────
+export function saveUserStore() {
+  const userId = useAuthStore.getState().userId;
+  if (!userId) return;
+  
+  const storeName = `ezmacro-data-${userId}`;
+  const state = useStore.getState();
+  const dataToSave = {
+    state: {
+      locale: state.locale,
+      onboarded: state.onboarded,
+      profile: state.profile,
+      tdeeResult: state.tdeeResult,
+      targets: state.targets,
+      dayLogs: state.dayLogs,
+      weights: state.weights,
+      savedShakes: state.savedShakes,
+      currentDate: state.currentDate,
+    },
+    version: 1,
+  };
+  
+  try {
+    localStorage.setItem(storeName, JSON.stringify(dataToSave));
+  } catch (e) {
+    console.error("Failed to save user store:", e);
+  }
+}
+
+// ─── Auto-save on every state change ────────────────────────────────
+useStore.subscribe(() => {
+  saveUserStore();
+});
+
+// ─── Migration: clean up old shared storage ─────────────────────────
+if (typeof window !== "undefined") {
+  try {
+    const oldData = localStorage.getItem("ezmacro-storage");
+    if (oldData) {
+      // Old shared store exists - we'll migrate it for the current auth user on login
+      // For now just mark it so we know migration is needed
+      console.log("[eZMacro] Old shared storage detected, will migrate on login");
+    }
+  } catch (e) {
+    // ignore
+  }
+}

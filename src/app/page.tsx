@@ -2,50 +2,73 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useStore } from "@/lib/store";
+import { useAuthStore, useStore, switchUserStore } from "@/lib/store";
 
 export default function Home() {
   const router = useRouter();
-  const userId = useStore((s) => s.userId);
-  const setUserId = useStore((s) => s.setUserId);
+  const userId = useAuthStore((s) => s.userId);
+  const setUserId = useAuthStore((s) => s.setUserId);
+  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const profile = useStore((s) => s.profile);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    // Wait for auth store to hydrate from localStorage before making decisions
+    if (!hasHydrated) return;
+
     async function checkAuth() {
-      // If user is already in store (from persistence), trust it and redirect immediately
+      // If user is already in auth store (from persistence), load their data and redirect
       if (userId) {
-        if (profile) {
+        switchUserStore(userId);
+        // Small delay to let store update
+        await new Promise((r) => setTimeout(r, 50));
+        const currentProfile = useStore.getState().profile;
+        if (currentProfile) {
           router.replace("/dashboard");
         } else {
-          router.replace("/onboarding");
+          // Try to fetch profile from server
+          try {
+            const profileRes = await fetch("/api/sync/profile");
+            const profileData = await profileRes.json();
+            if (profileData.profile) {
+              useStore.getState().setProfile(profileData.profile);
+              useStore.getState().setOnboarded(true);
+              router.replace("/dashboard");
+            } else {
+              router.replace("/onboarding");
+            }
+          } catch {
+            router.replace("/onboarding");
+          }
         }
         setChecking(false);
         return;
       }
 
-      // Only check with server if no userId in store
+      // No userId in store - check with server cookie
       try {
         const res = await fetch("/api/auth/me", {
-          credentials: 'include', // Ensure cookies are sent
+          credentials: 'include',
         });
         const data = await res.json();
         
         if (data.user) {
           setUserId(data.user.id);
+          switchUserStore(data.user.id);
           if (data.user.profile) {
+            // Load profile into per-user store
+            useStore.getState().setProfile(data.user.profile);
+            useStore.getState().setOnboarded(true);
             router.replace("/dashboard");
           } else {
             router.replace("/onboarding");
           }
         } else {
-          // No valid session on server
           setUserId(null);
           router.replace("/auth");
         }
       } catch (error) {
         console.error("Auth check failed:", error);
-        // On network error, redirect to auth
         setUserId(null);
         router.replace("/auth");
       } finally {
@@ -54,7 +77,7 @@ export default function Home() {
     }
 
     checkAuth();
-  }, [router, setUserId, userId, profile]);
+  }, [hasHydrated, router, setUserId, userId]);
 
   return (
     <div className="flex min-h-dvh items-center justify-center">

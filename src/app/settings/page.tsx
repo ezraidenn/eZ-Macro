@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
-import { useStore } from "@/lib/store";
+import { useStore, useAuthStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { t, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -15,13 +15,13 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const locale = useStore((s) => s.locale);
   const setLocale = useStore((s) => s.setLocale);
-  const setUserId = useStore((s) => s.setUserId);
-  const setOnboarded = useStore((s) => s.setOnboarded);
+  const setUserId = useAuthStore((s) => s.setUserId);
+  const resetUserData = useStore((s) => s.resetUserData);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setUserId(null);
-    setOnboarded(false);
+    resetUserData();
     router.replace("/auth");
   }
 
