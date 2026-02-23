@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { useStore } from "@/lib/store";
+import { useStore, useAuthStore } from "@/lib/store";
+import toast from "react-hot-toast";
 import {
   type Gender,
   type ActivityLevel,
@@ -33,6 +34,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { setProfile, setOnboarded, recalculateTDEE } = useStore();
   const locale = useStore((s) => s.locale);
+  const userId = useAuthStore((s) => s.userId);
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
@@ -43,6 +45,7 @@ export default function OnboardingPage() {
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>("moderate");
   const [trainingLevel, setTrainingLevel] = useState<TrainingLevel>("intermediate");
   const [goalType, setGoalType] = useState<GoalType>("cut");
+  const [isFinishing, setIsFinishing] = useState(false);
 
   const canNext =
     step === 0
@@ -59,6 +62,14 @@ export default function OnboardingPage() {
   }
 
   async function finish() {
+    if (!userId) {
+      toast.error(locale === "es" ? "Error: No hay sesión activa" : "Error: No active session");
+      router.replace("/auth");
+      return;
+    }
+
+    setIsFinishing(true);
+
     const profileData = {
       name,
       gender,
@@ -69,19 +80,30 @@ export default function OnboardingPage() {
       trainingLevel,
       goalType,
     };
+    
+    // Set profile in store first
     setProfile(profileData);
     setOnboarded(true);
 
     // Sync to DB
     try {
-      await fetch("/api/sync/profile", {
+      const res = await fetch("/api/sync/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profileData),
       });
-    } catch {}
 
-    router.replace("/dashboard");
+      if (!res.ok) {
+        throw new Error("Failed to sync profile");
+      }
+
+      // Success - redirect to dashboard
+      router.replace("/dashboard");
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+      toast.error(locale === "es" ? "Error al guardar perfil" : "Failed to save profile");
+      setIsFinishing(false);
+    }
   }
 
   function renderStep() {
@@ -309,18 +331,22 @@ export default function OnboardingPage() {
         )}
         <button
           onClick={next}
-          disabled={!canNext}
-          className={cn(
-            "flex h-12 flex-1 items-center justify-center gap-2 rounded-xl font-semibold text-sm transition-all",
-            canNext
-              ? "bg-emerald-500 text-black active:bg-emerald-600"
-              : "bg-secondary text-muted-foreground"
-          )}
+          disabled={!canNext || isFinishing}
+          className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {step === STEPS.length - 1 ? (
             <>
-              <Zap className="h-4 w-4" />
-              {t(locale, "onboarding.startTracking")}
+              {isFinishing ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  {locale === "es" ? "Guardando..." : "Saving..."}
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4" />
+                  {t(locale, "onboarding.startTracking")}
+                </>
+              )}
             </>
           ) : (
             <>
