@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore, useAuthStore, switchUserStore } from "@/lib/store";
+import { syncUserDataFromServer } from "@/lib/sync";
 import { t } from "@/lib/i18n";
 import { Zap, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,8 +14,6 @@ export default function AuthPage() {
   const router = useRouter();
   const locale = useStore((s) => s.locale);
   const setUserId = useAuthStore((s) => s.setUserId);
-  const setOnboarded = useStore((s) => s.setOnboarded);
-  const setProfile = useStore((s) => s.setProfile);
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -63,21 +62,9 @@ export default function AuthPage() {
       switchUserStore(data.userId);
 
       if (mode === "login" && data.hasProfile) {
-        // Load profile from server
-        const profileRes = await fetch("/api/sync/profile");
-        const profileData = await profileRes.json();
-        if (profileData.profile) {
-          setProfile({
-            name: profileData.profile.name,
-            gender: profileData.profile.gender,
-            age: profileData.profile.age,
-            height: profileData.profile.height,
-            weight: profileData.profile.weight,
-            activityLevel: profileData.profile.activityLevel,
-            trainingLevel: profileData.profile.trainingLevel,
-            goalType: profileData.profile.goalType,
-          });
-          setOnboarded(true);
+        // Sync all user data from server (profile, meals, weights)
+        const synced = await syncUserDataFromServer();
+        if (synced && useStore.getState().profile) {
           router.replace("/dashboard");
         } else {
           router.replace("/onboarding");

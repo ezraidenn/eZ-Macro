@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore, useStore, switchUserStore } from "@/lib/store";
+import { syncUserDataFromServer } from "@/lib/sync";
 
 export default function Home() {
   const router = useRouter();
@@ -24,20 +25,14 @@ export default function Home() {
         await new Promise((r) => setTimeout(r, 50));
         const currentProfile = useStore.getState().profile;
         if (currentProfile) {
+          // User has cached data, go to dashboard
           router.replace("/dashboard");
         } else {
-          // Try to fetch profile from server
-          try {
-            const profileRes = await fetch("/api/sync/profile");
-            const profileData = await profileRes.json();
-            if (profileData.profile) {
-              useStore.getState().setProfile(profileData.profile);
-              useStore.getState().setOnboarded(true);
-              router.replace("/dashboard");
-            } else {
-              router.replace("/onboarding");
-            }
-          } catch {
+          // No cached data - sync from server
+          const synced = await syncUserDataFromServer();
+          if (synced && useStore.getState().profile) {
+            router.replace("/dashboard");
+          } else {
             router.replace("/onboarding");
           }
         }
@@ -55,10 +50,10 @@ export default function Home() {
         if (data.user) {
           setUserId(data.user.id);
           switchUserStore(data.user.id);
-          if (data.user.profile) {
-            // Load profile into per-user store
-            useStore.getState().setProfile(data.user.profile);
-            useStore.getState().setOnboarded(true);
+          
+          // Sync all user data from server
+          const synced = await syncUserDataFromServer();
+          if (synced && useStore.getState().profile) {
             router.replace("/dashboard");
           } else {
             router.replace("/onboarding");
