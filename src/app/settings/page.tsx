@@ -16,12 +16,11 @@ export default function SettingsPage() {
   const locale = useStore((s) => s.locale);
   const setLocale = useStore((s) => s.setLocale);
   const setUserId = useAuthStore((s) => s.setUserId);
-  const resetUserData = useStore((s) => s.resetUserData);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
+    // Only clear auth state - keep user data in localStorage for when they log back in
     setUserId(null);
-    resetUserData();
     router.replace("/auth");
   }
 
