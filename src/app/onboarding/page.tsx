@@ -87,20 +87,28 @@ export default function OnboardingPage() {
 
     // Sync to DB
     try {
+      console.log("[Onboarding] Saving profile to DB:", profileData);
       const res = await fetch("/api/sync/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profileData),
       });
 
+      console.log("[Onboarding] Save response status:", res.status);
+
       if (!res.ok) {
+        const errorData = await res.json();
+        console.error("[Onboarding] Save failed:", errorData);
         throw new Error("Failed to sync profile");
       }
+
+      const responseData = await res.json();
+      console.log("[Onboarding] Profile saved successfully:", responseData);
 
       // Success - redirect to dashboard
       router.replace("/dashboard");
     } catch (error) {
-      console.error("Failed to save profile:", error);
+      console.error("[Onboarding] Failed to save profile:", error);
       toast.error(locale === "es" ? "Error al guardar perfil" : "Failed to save profile");
       setIsFinishing(false);
     }
@@ -332,7 +340,7 @@ export default function OnboardingPage() {
         <button
           onClick={next}
           disabled={!canNext || isFinishing}
-          className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {step === STEPS.length - 1 ? (
             <>

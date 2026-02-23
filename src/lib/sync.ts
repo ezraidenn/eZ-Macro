@@ -4,9 +4,19 @@ import { formatDateKey } from "./utils";
 
 export async function syncUserDataFromServer() {
   try {
+    console.log("[eZMacro] Starting sync from server...");
+    
     // 1. Fetch profile
     const profileRes = await fetch("/api/sync/profile");
+    console.log("[eZMacro] Profile response status:", profileRes.status);
+    
+    if (!profileRes.ok) {
+      console.error("[eZMacro] Profile fetch failed:", profileRes.status);
+      return false;
+    }
+    
     const profileData = await profileRes.json();
+    console.log("[eZMacro] Profile data:", profileData);
     
     if (profileData.profile) {
       useStore.getState().setProfile({
@@ -20,6 +30,10 @@ export async function syncUserDataFromServer() {
         goalType: profileData.profile.goalType,
       });
       useStore.getState().setOnboarded(true);
+      console.log("[eZMacro] Profile synced successfully");
+    } else {
+      console.log("[eZMacro] No profile found in database");
+      return false;
     }
 
     // 2. Fetch all meals
