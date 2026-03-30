@@ -3,9 +3,13 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// The client can send foods in two formats:
+// 1. Flat: { name, servingSize, servingUnit, servings, calories, protein, carbs, fat, fiber }
+// 2. Nested: { food: { name, servingSize, servingUnit }, servings, calories, protein, carbs, fat, fiber }
 const foodEntrySchema = z.object({
-  name: z.string().min(1).max(200),
-  servingSize: z.number().positive(),
+  id: z.string().optional(),
+  name: z.string().max(200).optional(),
+  servingSize: z.number().optional(),
   servingUnit: z.string().max(20).optional(),
   servings: z.number().positive().optional(),
   calories: z.number().min(0),
@@ -13,12 +17,19 @@ const foodEntrySchema = z.object({
   carbs: z.number().min(0),
   fat: z.number().min(0),
   fiber: z.number().min(0).optional(),
-  // Allow nested food object (from store format)
-  food: z.object({
-    name: z.string().optional(),
-    servingSize: z.number().optional(),
-    servingUnit: z.string().optional(),
-  }).optional(),
+  food: z
+    .object({
+      id: z.string().optional(),
+      name: z.string().optional(),
+      servingSize: z.number().optional(),
+      servingUnit: z.string().optional(),
+      calories: z.number().optional(),
+      protein: z.number().optional(),
+      carbs: z.number().optional(),
+      fat: z.number().optional(),
+      fiber: z.number().optional(),
+    })
+    .optional(),
 });
 
 const mealSchema = z.object({
@@ -69,8 +80,8 @@ export async function POST(req: NextRequest) {
         verified: meal.verified ?? true,
         foods: {
           create: meal.foods.map((f) => ({
-            name: f.food?.name ?? f.name,
-            servingSize: f.food?.servingSize ?? f.servingSize,
+            name: f.food?.name ?? f.name ?? "Alimento",
+            servingSize: f.food?.servingSize ?? f.servingSize ?? 100,
             servingUnit: f.food?.servingUnit ?? f.servingUnit ?? "g",
             servings: f.servings ?? 1,
             calories: f.calories,

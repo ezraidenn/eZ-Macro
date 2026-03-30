@@ -21,20 +21,13 @@ export default function Home() {
       // If user is already in auth store (from persistence), load their data and redirect
       if (userId) {
         switchUserStore(userId);
-        // Small delay to let store update
-        await new Promise((r) => setTimeout(r, 50));
-        const currentProfile = useStore.getState().profile;
-        if (currentProfile) {
-          // User has cached data, go to dashboard
+        // Always sync from server to restore meals, weights, and profile
+        // even if profile is cached in localStorage
+        const synced = await syncUserDataFromServer();
+        if (synced && useStore.getState().profile) {
           router.replace("/dashboard");
         } else {
-          // No cached data - sync from server
-          const synced = await syncUserDataFromServer();
-          if (synced && useStore.getState().profile) {
-            router.replace("/dashboard");
-          } else {
-            router.replace("/onboarding");
-          }
+          router.replace("/onboarding");
         }
         setChecking(false);
         return;

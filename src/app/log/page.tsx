@@ -162,14 +162,12 @@ export default function LogPage() {
 
     addMeal(currentDate, meal);
 
-    // Sync to DB
-    try {
-      await fetch("/api/sync/meals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meal, date: currentDate }),
-      });
-    } catch {}
+    // Sync to DB (fire and forget — data is already saved to localStorage above)
+    fetch("/api/sync/meals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meal, date: currentDate }),
+    }).catch(() => {});
 
     toast.success(t(locale, "log.mealSaved"));
     router.push("/dashboard");
