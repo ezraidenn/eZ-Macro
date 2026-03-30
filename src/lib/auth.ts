@@ -1,9 +1,11 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "ezmacro-secret-key-change-in-production-2024"
-);
+function getSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error("JWT_SECRET environment variable is not set");
+  return new TextEncoder().encode(secret);
+}
 
 const ALG = "HS256";
 const COOKIE_NAME = "ezmacro-token";
@@ -12,20 +14,19 @@ export async function createToken(userId: string, rememberMe: boolean = false): 
   const jwt = new SignJWT({ userId })
     .setProtectedHeader({ alg: ALG })
     .setIssuedAt();
-  
-  // If remember me, set expiration to 1 year, otherwise 30 days
+
   if (rememberMe) {
     jwt.setExpirationTime("365d");
   } else {
     jwt.setExpirationTime("30d");
   }
-  
-  return jwt.sign(SECRET);
+
+  return jwt.sign(getSecret());
 }
 
 export async function verifyToken(token: string): Promise<{ userId: string } | null> {
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getSecret());
     return { userId: payload.userId as string };
   } catch {
     return null;

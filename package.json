@@ -46,6 +46,7 @@
     "tailwind-merge": "^2.2.1",
     "uuid": "^9.0.0",
     "ws": "^8.19.0",
+    "zod": "^4.3.6",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

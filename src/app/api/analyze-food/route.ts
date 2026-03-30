@@ -1,5 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { getSession } from "@/lib/auth";
+
+// Simple in-memory rate limiter: max 20 analyses per hour per user
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT = 20;
+const WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = (rateLimitMap.get(userId) ?? []).filter(
+    (t) => now - t < WINDOW_MS
+  );
+  if (timestamps.length >= RATE_LIMIT) return false;
+  timestamps.push(now);
+  rateLimitMap.set(userId, timestamps);
+  return true;
+}
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -254,6 +271,18 @@ OBJETIVO: Precisión realista, no optimismo fitness. Mejor sobrestimar 10% que s
 - Las calorías DEBEN calcularse desde macros, NUNCA desde memoria. Inconsistencias matemáticas son inaceptables.`;
 
 export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!checkRateLimit(session.userId)) {
+    return NextResponse.json(
+      { error: "Límite de análisis alcanzado (20/hora). Intenta más tarde." },
+      { status: 429 }
+    );
+  }
+
   try {
     const { imageBase64, imageUrl, images, userComment } = await req.json();
 
