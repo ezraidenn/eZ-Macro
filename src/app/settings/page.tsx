@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
-import { useStore, useAuthStore } from "@/lib/store";
+import { useStore, useAuthStore, saveUserStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { t, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -19,31 +19,28 @@ export default function SettingsPage() {
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    // Only clear auth state - keep user data in localStorage for when they log back in
+    // Persist latest state before clearing auth (safety net)
+    saveUserStore();
     setUserId(null);
     router.replace("/auth");
   }
 
   async function handleLocaleChange(newLocale: Locale) {
     setLocale(newLocale);
-    try {
-      await fetch("/api/sync/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locale: newLocale }),
-      });
-    } catch {}
+    fetch("/api/sync/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale: newLocale }),
+    }).catch(() => {});
   }
 
   async function handleThemeChange(newTheme: string) {
     setTheme(newTheme);
-    try {
-      await fetch("/api/sync/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme: newTheme }),
-      });
-    } catch {}
+    fetch("/api/sync/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: newTheme }),
+    }).catch(() => {});
   }
 
   return (

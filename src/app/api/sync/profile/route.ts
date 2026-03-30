@@ -68,6 +68,39 @@ export async function POST(req: NextRequest) {
   }
 }
 
+const patchProfileSchema = z.object({
+  locale: z.enum(["es", "en"]).optional(),
+  theme: z.enum(["dark", "light"]).optional(),
+});
+
+export async function PATCH(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const body = await req.json();
+    const parsed = patchProfileSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+    }
+
+    const updateData: Record<string, string> = {};
+    if (parsed.data.locale) updateData.locale = parsed.data.locale;
+    if (parsed.data.theme) updateData.theme = parsed.data.theme;
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.profile.updateMany({
+        where: { userId: session.userId },
+        data: updateData,
+      });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -54,6 +54,15 @@ export default function DashboardPage() {
       ? weights[weights.length - 1].weight - weights[weights.length - 7].weight
       : null;
 
+  function handleDeleteMeal(mealId: string) {
+    removeMeal(currentDate, mealId);
+    fetch("/api/sync/meals", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mealId }),
+    }).catch(() => {});
+  }
+
   function shiftDate(days: number) {
     const d = new Date(currentDate + "T12:00:00");
     d.setDate(d.getDate() + days);
@@ -269,7 +278,7 @@ export default function DashboardPage() {
                   meal={meal}
                   delay={0.3 + i * 0.05}
                   onTap={() => {}}
-                  onDelete={() => removeMeal(currentDate, meal.id)}
+                  onDelete={() => handleDeleteMeal(meal.id)}
                 />
               ))}
             </div>

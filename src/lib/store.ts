@@ -324,16 +324,3 @@ useStore.subscribe(() => {
   saveUserStore();
 });
 
-// ─── Migration: clean up old shared storage ─────────────────────────
-if (typeof window !== "undefined") {
-  try {
-    const oldData = localStorage.getItem("ezmacro-storage");
-    if (oldData) {
-      // Old shared store exists - we'll migrate it for the current auth user on login
-      // For now just mark it so we know migration is needed
-      console.log("[eZMacro] Old shared storage detected, will migrate on login");
-    }
-  } catch (e) {
-    // ignore
-  }
-}
