@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useStore, useAuthStore, switchUserStore } from "@/lib/store";
 import { syncUserDataFromServer } from "@/lib/sync";
 import { t } from "@/lib/i18n";
+import Link from "next/link";
 import { Zap, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -191,6 +192,18 @@ export default function AuthPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Forgot password — only for login */}
+          {mode === "login" && (
+            <div className="text-right -mt-1">
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted-foreground hover:text-emerald-400 transition-colors"
+              >
+                {t(locale, "auth.forgotPassword")}
+              </Link>
+            </div>
+          )}
 
           {/* Remember Me - Only for login */}
           {mode === "login" && (

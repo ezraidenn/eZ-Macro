@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashSync } from "bcryptjs";
 import { createToken, tokenCookieOptions } from "@/lib/auth";
+import { sendWelcomeEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,6 +29,10 @@ export async function POST(req: NextRequest) {
     const token = await createToken(user.id);
     const res = NextResponse.json({ success: true, userId: user.id });
     res.cookies.set(tokenCookieOptions(token));
+
+    // Fire and forget — don't block registration if email fails
+    sendWelcomeEmail(email).catch(() => {});
+
     return res;
   } catch (err: any) {
     console.error("Register error:", err);

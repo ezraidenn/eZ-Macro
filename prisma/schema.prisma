@@ -13,6 +13,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  passwordResetToken  String?   @unique
+  passwordResetExpiry DateTime?
+
   profile      Profile?
   mealEntries  MealEntry[]
   weightEntries WeightEntry[]
