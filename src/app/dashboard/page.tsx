@@ -55,7 +55,7 @@ export default function DashboardPage() {
       : null;
 
   function handleDeleteMeal(mealId: string) {
-    removeMeal(currentDate, mealId);
+    removeMeal(currentDate, mealId); // optimistic
     fetch("/api/sync/meals", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },

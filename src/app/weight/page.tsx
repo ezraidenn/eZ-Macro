@@ -55,23 +55,27 @@ export default function WeightPage() {
       toast.error(t(locale, "weight.invalidWeight"));
       return;
     }
-    addWeight(today, val);
 
-    // Update profile weight and recalculate TDEE/macros
-    if (profile) {
-      setProfile({ ...profile, weight: val });
-    }
-
-    // Sync to DB
     try {
-      await fetch("/api/sync/weights", {
+      const res = await fetch("/api/sync/weights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: today, weight: val }),
       });
-    } catch {}
 
-    toast.success(t(locale, "weight.logged"));
+      if (!res.ok) {
+        toast.error(t(locale, "auth.genericError"));
+        return;
+      }
+
+      // Actualizar store solo después de confirmar guardado en BD
+      addWeight(today, val);
+      if (profile) setProfile({ ...profile, weight: val });
+
+      toast.success(t(locale, "weight.logged"));
+    } catch {
+      toast.error(t(locale, "auth.genericError"));
+    }
   }
 
   function adjustWeight(delta: number) {

@@ -6,12 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { cn, formatDateKey } from "@/lib/utils";
-import { v4 as uuid } from "uuid";
 import {
   type MealType,
   type MealEntry,
   type MealFoodEntry,
-  type FoodItem,
   type AIFoodAnalysis,
   MEAL_LABELS,
 } from "@/lib/types";
@@ -33,7 +31,6 @@ import {
   ImagePlus,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { useStore as useAppStore } from "@/lib/store";
 import { t, getMealLabel } from "@/lib/i18n";
 
 const MEAL_TYPE_OPTIONS: { type: MealType; icon: React.ElementType; color: string }[] = [
@@ -65,6 +62,7 @@ export default function LogPage() {
   const [foods, setFoods] = useState<MealFoodEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [userComment, setUserComment] = useState<string>("");
+  const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const compressImage = useCallback(async (file: File): Promise<string> => {
@@ -146,31 +144,80 @@ export default function LogPage() {
   }
 
   async function saveMeal() {
-    if (foods.length === 0) return;
+    if (foods.length === 0 || saving) return;
+    setSaving(true);
 
     const now = new Date();
-    const meal: MealEntry = {
-      id: uuid(),
-      type: mealType,
-      name: MEAL_LABELS[mealType],
-      time: `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`,
-      foods,
-      photoUrl: imagePreviews[0] ?? undefined,
-      aiAnalyzed: !!analysis,
-      verified: true,
-    };
+    const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
-    addMeal(currentDate, meal);
+    try {
+      const res = await fetch("/api/sync/meals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meal: {
+            type: mealType,
+            name: MEAL_LABELS[mealType],
+            time,
+            foods,
+            photoUrl: imagePreviews[0] ?? null,
+            aiAnalyzed: !!analysis,
+            verified: true,
+          },
+          date: currentDate,
+        }),
+      });
 
-    // Sync to DB (fire and forget — data is already saved to localStorage above)
-    fetch("/api/sync/meals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ meal, date: currentDate }),
-    }).catch(() => {});
+      if (!res.ok) {
+        toast.error(t(locale, "log.saveError"));
+        return;
+      }
 
-    toast.success(t(locale, "log.mealSaved"));
-    router.push("/dashboard");
+      const { meal: saved } = await res.json();
+
+      // Construir MealEntry con el ID real de la BD
+      const meal: MealEntry = {
+        id: saved.id,
+        type: saved.type as MealType,
+        name: saved.name,
+        time: saved.time,
+        photoUrl: saved.photoUrl ?? undefined,
+        aiAnalyzed: saved.aiAnalyzed,
+        verified: saved.verified,
+        foods: saved.foods.map((f: {
+          id: string; name: string; servingSize: number; servingUnit: string;
+          servings: number; calories: number; protein: number; carbs: number;
+          fat: number; fiber: number;
+        }): MealFoodEntry => ({
+          id: f.id,
+          food: {
+            id: f.id,
+            name: f.name,
+            servingSize: f.servingSize,
+            servingUnit: f.servingUnit,
+            calories: f.calories,
+            protein: f.protein,
+            carbs: f.carbs,
+            fat: f.fat,
+            fiber: f.fiber,
+          },
+          servings: f.servings,
+          calories: f.calories,
+          protein: f.protein,
+          carbs: f.carbs,
+          fat: f.fat,
+          fiber: f.fiber,
+        })),
+      };
+
+      addMeal(currentDate, meal);
+      toast.success(t(locale, "log.mealSaved"));
+      router.push("/dashboard");
+    } catch {
+      toast.error(t(locale, "log.saveError"));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -576,15 +623,19 @@ export default function LogPage() {
                 </button>
                 <button
                   onClick={saveMeal}
-                  disabled={foods.length === 0}
+                  disabled={foods.length === 0 || saving}
                   className={cn(
                     "flex h-12 flex-1 items-center justify-center gap-2 rounded-xl font-semibold text-sm transition-all",
-                    foods.length > 0
+                    foods.length > 0 && !saving
                       ? "bg-emerald-500 text-black active:bg-emerald-600"
                       : "bg-secondary text-muted-foreground"
                   )}
                 >
-                  <Check className="h-4 w-4" />
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
                   {t(locale, "log.saveMeal")}
                 </button>
               </div>

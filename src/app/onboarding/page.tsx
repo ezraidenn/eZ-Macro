@@ -81,35 +81,26 @@ export default function OnboardingPage() {
       goalType,
     };
     
-    // Set profile in store first
-    setProfile(profileData);
-    setOnboarded(true);
-
-    // Sync to DB
+    // Guardar en BD primero — es la fuente de verdad
     try {
-      console.log("[Onboarding] Saving profile to DB:", profileData);
       const res = await fetch("/api/sync/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profileData),
       });
 
-      console.log("[Onboarding] Save response status:", res.status);
-
       if (!res.ok) {
         const errorData = await res.json();
-        console.error("[Onboarding] Save failed:", errorData);
-        throw new Error("Failed to sync profile");
+        throw new Error(errorData.error ?? "Failed to save profile");
       }
 
-      const responseData = await res.json();
-      console.log("[Onboarding] Profile saved successfully:", responseData);
+      // Solo actualizar store después de confirmar guardado en BD
+      setProfile(profileData);
+      setOnboarded(true);
 
-      // Success - redirect to dashboard
       router.replace("/dashboard");
-    } catch (error) {
-      console.error("[Onboarding] Failed to save profile:", error);
-      toast.error(locale === "es" ? "Error al guardar perfil" : "Failed to save profile");
+    } catch {
+      toast.error(locale === "es" ? "Error al guardar perfil. Intenta de nuevo." : "Failed to save profile. Please try again.");
       setIsFinishing(false);
     }
   }
