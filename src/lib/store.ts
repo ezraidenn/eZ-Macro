@@ -12,10 +12,18 @@ import {
   type MealType,
   type MacroTotals,
   type SavedShake,
+  type SavedMealTemplate,
 } from "./types";
 import { calculateFullTDEE } from "./calculations";
 import { formatDateKey, movingAverage } from "./utils";
 import type { Locale } from "./i18n";
+
+// ─── Hydration guard ─────────────────────────────────────────────────
+// Prevents the subscribe callback from saving empty/default state
+// to localStorage before the store is properly loaded.
+let _storeHydrated = false;
+export function markStoreHydrated() { _storeHydrated = true; }
+export function isStoreHydrated() { return _storeHydrated; }
 
 // ─── Auth Store (global, shared across users) ───────────────────────
 interface AuthState {
@@ -79,6 +87,11 @@ interface AppState {
   savedShakes: SavedShake[];
   addShake: (shake: SavedShake) => void;
   removeShake: (id: string) => void;
+
+  // Saved Meal Templates
+  savedMealTemplates: SavedMealTemplate[];
+  saveMealTemplate: (template: SavedMealTemplate) => void;
+  removeMealTemplate: (id: string) => void;
 
   // Current date view
   currentDate: string;
@@ -221,6 +234,18 @@ export const useStore = create<AppState>()(
         set((state) => ({ savedShakes: state.savedShakes.filter((s) => s.id !== id) }));
       },
 
+      savedMealTemplates: [],
+      saveMealTemplate: (template) => {
+        set((state) => ({
+          savedMealTemplates: [template, ...state.savedMealTemplates].slice(0, 20), // max 20 templates
+        }));
+      },
+      removeMealTemplate: (id) => {
+        set((state) => ({
+          savedMealTemplates: state.savedMealTemplates.filter((t) => t.id !== id),
+        }));
+      },
+
       // Always initialize to today's date
       currentDate: formatDateKey(new Date()),
       setCurrentDate: (d) => set({ currentDate: d }),
@@ -234,6 +259,7 @@ export const useStore = create<AppState>()(
           dayLogs: {},
           weights: [],
           savedShakes: [],
+          savedMealTemplates: [],
           currentDate: formatDateKey(new Date()),
         });
       },
@@ -253,8 +279,18 @@ export const useStore = create<AppState>()(
 // ─── Helper: Switch user data store ─────────────────────────────────
 // When userId changes, we need to reload the store from the correct localStorage key
 export function switchUserStore(userId: string | null) {
-  const storeName = userId ? `ezmacro-data-${userId}` : "ezmacro-data-anonymous";
-  
+  // Mark as not hydrated while switching — prevents subscribe from saving
+  // empty/intermediate state to the per-user key.
+  _storeHydrated = false;
+
+  if (!userId) {
+    // Logout: clear store in memory, don't touch any per-user key
+    useStore.getState().resetUserData();
+    return;
+  }
+
+  const storeName = `ezmacro-data-${userId}`;
+
   // Try to load existing data for this user from localStorage
   try {
     const raw = localStorage.getItem(storeName);
@@ -271,12 +307,14 @@ export function switchUserStore(userId: string | null) {
           dayLogs: state.dayLogs || {},
           weights: state.weights || [],
           savedShakes: state.savedShakes || [],
+          savedMealTemplates: state.savedMealTemplates || [],
           currentDate: formatDateKey(new Date()), // Always today
         });
         // Recalculate TDEE if profile exists
         if (state.profile) {
           useStore.getState().recalculateTDEE();
         }
+        _storeHydrated = true;
         return;
       }
     }
@@ -284,12 +322,19 @@ export function switchUserStore(userId: string | null) {
     console.error("Failed to load user store:", e);
   }
 
-  // No existing data for this user - reset to defaults
+  // No existing data for this user — start from defaults.
+  // Do NOT call resetUserData here: it would trigger the subscribe,
+  // which would save empty state. Instead, just leave defaults and
+  // wait for syncUserDataFromServer to populate from DB.
   useStore.getState().resetUserData();
+  // Don't mark as hydrated yet — wait for sync to finish
 }
 
 // ─── Helper: Save current store to user-specific key ────────────────
 export function saveUserStore() {
+  // Guard: don't save until the store has been properly loaded
+  if (!_storeHydrated) return;
+
   const userId = useAuthStore.getState().userId;
   if (!userId) return;
   
@@ -305,6 +350,7 @@ export function saveUserStore() {
       dayLogs: state.dayLogs,
       weights: state.weights,
       savedShakes: state.savedShakes,
+      savedMealTemplates: state.savedMealTemplates,
       currentDate: state.currentDate,
     },
     version: 1,

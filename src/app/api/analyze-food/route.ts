@@ -33,6 +33,20 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const SYSTEM_PROMPT = `Eres un analista nutricional experto en estimación por imagen con precisión científica. Tu objetivo es minimizar el error de estimación usando metodología sistemática.
 
 ═══════════════════════════════════════════════════════════════════════════════
+REGLA DE PRIORIDAD MÁXIMA — LEE ESTO PRIMERO:
+═══════════════════════════════════════════════════════════════════════════════
+
+Si el usuario proporciona información específica en su mensaje, esa información tiene
+PRIORIDAD ABSOLUTA sobre cualquier estimación visual. Úsala directamente.
+
+Ejemplos:
+- "son 300g de pollo" → usa 300g exactos, no estimes visualmente
+- "pedí el combo #3 del McDonald's" → usa valores conocidos de ese combo
+- "con 2 cucharadas de aceite de oliva" → agrega exactamente 2 cdas (27g, 240 kcal)
+- "sin piel" → usa valores sin piel aunque parezca que hay piel
+- El contexto del usuario anula cualquier duda visual.
+
+═══════════════════════════════════════════════════════════════════════════════
 PROTOCOLO DE ANÁLISIS (ejecutar en orden):
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -124,6 +138,10 @@ Si hay hueso visible, aplica factor de conversión PRIMERO:
 - Pescado blanco: 110 kcal, P23g, G2g, C0g
 - Atún en agua: 110 kcal, P25g, G1g, C0g
 - Huevo entero: 155 kcal, P13g, G11g, C1g (por 100g = ~2 huevos)
+- Camarón cocido: 99 kcal, P24g, G1g, C0g
+- Salmón: 208 kcal, P20g, G13g, C0g
+- Cerdo lomo: 242 kcal, P27g, G14g, C0g
+- Bistec res (sirloin): 207 kcal, P26g, G11g, C0g
 
 CARBOHIDRATOS (por 100g cocido):
 - Arroz blanco: 130 kcal, C28g, P2.7g, G0.3g, fibra 0.4g
@@ -136,15 +154,68 @@ CARBOHIDRATOS (por 100g cocido):
 - Pan blanco (30g rebanada): 80 kcal, C15g, P2.5g, G1g, fibra 0.8g
 - Frijoles cocidos: 127 kcal, C23g, P8g, G0.5g, fibra 7.5g
 - Frijoles refritos (con aceite): 110 kcal, C16g, P6g, G3g, fibra 5g
+- Lentejas cocidas: 116 kcal, C20g, P9g, G0.4g, fibra 7.9g
+- Avena cocida: 71 kcal, C12g, P2.5g, G1.5g, fibra 1.7g
+- Cereal con leche (30g cereal + 200ml leche): 280 kcal, C45g, P10g, G6g, fibra 2g
 
 GRASAS Y EXTRAS:
 - Aceite (cualquier tipo): 884 kcal, G100g por 100ml (120 kcal por cucharada 15ml)
 - Aguacate: 160 kcal, C9g, P2g, G15g, fibra 7g (por 100g)
 - Queso fresco: 264 kcal, P21g, G20g, C3g (por 100g)
 - Queso Oaxaca: 300 kcal, P25g, G22g, C3g
+- Queso amarillo (cheddar): 403 kcal, P25g, G33g, C1g
+- Queso crema: 342 kcal, P6g, G34g, C4g
 - Crema mexicana: 195 kcal, P2g, G20g, C4g (por 100g)
 - Mayonesa: 680 kcal, P1g, G75g, C1g (por 100g)
 - Mantequilla: 717 kcal, P0.9g, G81g, C0.1g
+- Aderezo ranch / caesar: 320 kcal, P2g, G33g, C4g (por 100g)
+- Salsa de tomate: 29 kcal, P1g, G0g, C7g (por 100g)
+- Nutella (15g porción): 80 kcal, P1g, G4.5g, C9g
+
+PIZZA (por rebanada ~150g o pizza completa 400g):
+- Rebanada queso simple (150g): 300 kcal, P12g, C35g, G12g, fibra 2g
+- Rebanada pepperoni (150g): 370 kcal, P14g, C35g, G18g, fibra 2g
+- Rebanada hawaiana (150g): 310 kcal, P13g, C37g, G12g, fibra 2g
+- Pizza personal entera ~400g (multiplicar rebanada × 2.7)
+- Pizza mediana rebanada: calcular visualmente cuántas rebanadas del total
+
+HAMBURGUESAS (completa con pan):
+- Hamburguesa simple casera (~200g): 450 kcal, P25g, C35g, G18g, fibra 2g
+- BigMac (~220g): 560 kcal, P27g, C45g, G26g, fibra 3g
+- Cuarto de libra con queso (~280g): 530 kcal, P29g, C42g, G26g, fibra 3g
+- Solo la carne de res 100g: 250 kcal, P26g, G17g, C0g
+
+BEBIDAS ALCOHÓLICAS (calorías de alcohol = 7 kcal/g, no se cuentan como macros estándar):
+- Cerveza regular 355ml: 150 kcal, C13g, P2g, G0g [reportar alcohol: 14g]
+- Cerveza light 355ml: 100 kcal, C7g, P1g, G0g [reportar alcohol: 10g]
+- Vino tinto/blanco 150ml copa: 125 kcal, C4g, P0g, G0g [reportar alcohol: 15g]
+- Destilado 45ml (tequila/vodka/whisky): 100 kcal, C0g, P0g, G0g [reportar alcohol: 14g]
+- Michelada 355ml: 200 kcal, C20g, P2g, G1g [alcohol 10g]
+NOTA: Para bebidas alcohólicas, reporta "alcohol: Xg" en notes y suma las calorías del alcohol al total.
+
+REFRESCOS Y BEBIDAS NO ALCOHÓLICAS:
+- Coca-Cola regular 355ml: 140 kcal, C39g, P0g, G0g
+- Coca-Cola/Pepsi Zero 355ml: 0 kcal
+- Jugo de naranja 200ml: 88 kcal, C21g, P1g, G0g
+- Leche entera 240ml: 149 kcal, C12g, P8g, G8g
+- Leche descremada 240ml: 83 kcal, C12g, P8g, G0g
+- Agua natural: 0 kcal
+
+PLATILLOS COMPUESTOS MEXICANOS (por porción estándar):
+- Taco al pastor (1 pieza, tortilla+carne+piña+cebolla+cilantro ~100g): 200 kcal, P12g, C18g, G8g, fibra 2g
+- Taco de canasta (1 pieza ~80g, frijol/papa/chicharrón): 180 kcal, P7g, C25g, G6g, fibra 2g
+- Taco de bistec (1 pieza ~110g): 220 kcal, P18g, C18g, G8g, fibra 1g
+- Taco de carnitas (1 pieza ~100g): 230 kcal, P16g, C18g, G10g, fibra 1g
+- Chile relleno mediano (~200g con salsa): 350 kcal, P20g, C15g, G22g, fibra 3g
+- Enchiladas (2 piezas ~250g con salsa y queso): 450 kcal, P22g, C40g, G20g, fibra 4g
+- Pozole rojo tazón 350ml: 300 kcal, P25g, C30g, G8g, fibra 3g
+- Sopa de lima 350ml: 180 kcal, P18g, C15g, G5g, fibra 1g
+- Tamales (1 pieza ~100g): 220 kcal, P6g, C28g, G10g, fibra 2g
+- Chilaquiles (1 porción ~300g con crema y queso): 550 kcal, P20g, C55g, G28g, fibra 4g
+- Quesadilla (1 pieza ~150g, tortilla + queso): 380 kcal, P16g, C38g, G18g, fibra 2g
+- Torta (1 pieza ~300g): 520 kcal, P30g, C55g, G18g, fibra 4g
+- Burrito regular (~250g): 430 kcal, P22g, C50g, G14g, fibra 5g
+- Sopes (1 pieza ~100g con toppings): 250 kcal, P10g, C30g, G10g, fibra 3g
 
 AJUSTES POR MÉTODO DE COCCIÓN:
 - Fritura profunda: +40-60% calorías (absorbe aceite)
@@ -273,12 +344,14 @@ REGLAS CRÍTICAS:
 12. **VALIDACIÓN FINAL: Proteína total ÷ peso total de proteínas animales debe dar ≤30g/100g. Si no, recalcula.**
 13. **CALORÍAS = FÓRMULA OBLIGATORIA: Para CADA alimento, calories DEBE ser exactamente (protein×4 + carbs×4 + fat×9). NO uses valores de tablas.**
 14. **VERIFICACIÓN MATEMÁTICA: Antes de enviar el JSON, verifica que CADA item cumple: |calories - (P×4+C×4+F×9)| < 5 kcal**
+15. **CONTEXTO DEL USUARIO: Si el usuario especificó cantidades, ingredientes o nombre del plato, esos valores tienen prioridad ABSOLUTA sobre tu estimación visual.**
 
 OBJETIVO: Precisión realista, no optimismo fitness. Mejor sobrestimar 10% que subestimar 30%.
 
-⚠️ ATENCIÓN ESPECIAL: 
+⚠️ ATENCIÓN ESPECIAL:
 - La proteína es fácil de sobreestimar. Sé conservador con los pesos de carne/pollo/pescado.
-- Las calorías DEBEN calcularse desde macros, NUNCA desde memoria. Inconsistencias matemáticas son inaceptables.`;
+- Las calorías DEBEN calcularse desde macros, NUNCA desde memoria. Inconsistencias matemáticas son inaceptables.
+- Bebidas alcohólicas: reportar en notes el contenido de alcohol (g) y sumar sus calorías (7 kcal/g) al total.`;
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -307,7 +380,7 @@ export async function POST(req: NextRequest) {
           hostname === "localhost" ||
           hostname.startsWith("192.168.") ||
           hostname.startsWith("10.") ||
-          hostname.startsWith("172.") ||
+          /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname) ||
           hostname === "127.0.0.1" ||
           hostname === "0.0.0.0"
         ) {
@@ -358,11 +431,11 @@ export async function POST(req: NextRequest) {
     let userPrompt = photoCount > 1
       ? `Analyze these ${photoCount} food photos together as a single meal. They show different angles or items of the same meal.`
       : "Analyze this food photo.";
-    
+
     if (userComment) {
-      userPrompt += ` User context: "${userComment}". Use this context to better estimate portions.`;
+      userPrompt += `\n\nCONTEXTO DEL USUARIO (PRIORIDAD ABSOLUTA): "${userComment}"\nUsa este contexto directamente — tiene prioridad sobre tu estimación visual. Si el usuario indica pesos, cantidades o ingredientes específicos, úsalos exactamente.`;
     }
-    userPrompt += " Return nutritional breakdown as JSON.";
+    userPrompt += "\n\nReturn nutritional breakdown as JSON.";
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -376,7 +449,7 @@ export async function POST(req: NextRequest) {
           ],
         },
       ],
-      max_tokens: 1500,
+      max_tokens: 2500,
       temperature: 0.1,
     });
 
@@ -402,14 +475,13 @@ export async function POST(req: NextRequest) {
       );
       const reportedKcal = item.calories;
       const difference = Math.abs(calculatedKcal - reportedKcal);
-      const percentDiff = (difference / calculatedKcal) * 100;
+      const percentDiff = calculatedKcal > 0 ? (difference / calculatedKcal) * 100 : 0;
 
       // If difference > 8%, auto-correct to calculated value
       if (percentDiff > 8) {
         console.warn(`Calorie mismatch detected: Reported ${reportedKcal} kcal, Calculated ${calculatedKcal} kcal (${percentDiff.toFixed(1)}% diff)`);
         item.calories = calculatedKcal;
-        
-        // Add note about correction
+
         if (!parsed.notes) parsed.notes = [];
         parsed.notes.push(
           `⚠️ Calorías auto-corregidas: ${reportedKcal} → ${calculatedKcal} kcal (diferencia ${percentDiff.toFixed(1)}%)`
@@ -440,7 +512,7 @@ export async function POST(req: NextRequest) {
       );
       const reportedTotalKcal = parsed.totalCalories || totals.calories;
       const totalDifference = Math.abs(calculatedTotalKcal - reportedTotalKcal);
-      const totalPercentDiff = (totalDifference / calculatedTotalKcal) * 100;
+      const totalPercentDiff = calculatedTotalKcal > 0 ? (totalDifference / calculatedTotalKcal) * 100 : 0;
 
       if (totalPercentDiff > 8) {
         console.warn(`Total calorie mismatch: Reported ${reportedTotalKcal} kcal, Calculated ${calculatedTotalKcal} kcal`);

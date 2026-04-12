@@ -64,10 +64,12 @@ export default function AuthPage() {
 
       if (mode === "login" && data.hasProfile) {
         // Sync all user data from server (profile, meals, weights)
-        const synced = await syncUserDataFromServer();
-        if (synced && useStore.getState().profile) {
+        await syncUserDataFromServer();
+        // Go to dashboard if we have a profile (from DB sync or localStorage)
+        if (useStore.getState().profile) {
           router.replace("/dashboard");
         } else {
+          // Sync failed AND no localStorage data — must re-onboard
           router.replace("/onboarding");
         }
       } else {

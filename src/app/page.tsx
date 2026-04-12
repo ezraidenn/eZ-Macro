@@ -23,9 +23,9 @@ export default function Home() {
         switchUserStore(userId);
         // Always sync from server to restore meals, weights, and profile
         // even if profile is cached in localStorage
-        const synced = await syncUserDataFromServer();
+        await syncUserDataFromServer();
         setChecking(false);
-        if (synced && useStore.getState().profile) {
+        if (useStore.getState().profile) {
           router.replace("/dashboard");
         } else {
           router.replace("/onboarding");
@@ -45,8 +45,8 @@ export default function Home() {
           switchUserStore(data.user.id);
           
           // Sync all user data from server
-          const synced = await syncUserDataFromServer();
-          if (synced && useStore.getState().profile) {
+          await syncUserDataFromServer();
+          if (useStore.getState().profile) {
             router.replace("/dashboard");
           } else {
             router.replace("/onboarding");

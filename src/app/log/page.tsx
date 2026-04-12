@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
+import { FoodSearchModal } from "@/components/ui/food-search-modal";
 import { cn, formatDateKey } from "@/lib/utils";
 import {
   type MealType,
   type MealEntry,
   type MealFoodEntry,
   type AIFoodAnalysis,
+  type SavedMealTemplate,
   MEAL_LABELS,
 } from "@/lib/types";
 import {
@@ -30,21 +32,22 @@ import {
   AlertCircle,
   Sparkles,
   ImagePlus,
+  Search,
+  BookmarkPlus,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { t, getMealLabel } from "@/lib/i18n";
 
 const MEAL_TYPE_OPTIONS: { type: MealType; icon: React.ElementType; color: string }[] = [
-  { type: "breakfast", icon: Sun, color: "text-amber-400 bg-amber-400/10" },
-  { type: "lunch", icon: CloudSun, color: "text-emerald-400 bg-emerald-400/10" },
-  { type: "dinner", icon: Moon, color: "text-indigo-400 bg-indigo-400/10" },
-  { type: "snack", icon: Cookie, color: "text-violet-400 bg-violet-400/10" },
+  { type: "breakfast", icon: Sun,      color: "text-amber-400 bg-amber-400/10"   },
+  { type: "lunch",     icon: CloudSun, color: "text-emerald-400 bg-emerald-400/10" },
+  { type: "dinner",    icon: Moon,     color: "text-indigo-400 bg-indigo-400/10"  },
+  { type: "snack",     icon: Cookie,   color: "text-violet-400 bg-violet-400/10"  },
 ];
 
-// Helper function to determine meal type based on current hour
 function getMealTypeByTime(): MealType {
   const hour = new Date().getHours();
-  if (hour >= 6 && hour < 11) return "breakfast";
+  if (hour >= 6  && hour < 11) return "breakfast";
   if (hour >= 11 && hour < 16) return "lunch";
   if (hour >= 16 && hour < 21) return "dinner";
   return "snack";
@@ -52,18 +55,20 @@ function getMealTypeByTime(): MealType {
 
 export default function LogPage() {
   const router = useRouter();
-  const addMeal = useStore((s) => s.addMeal);
-  const currentDate = useStore((s) => s.currentDate);
-  const locale = useStore((s) => s.locale);
+  const addMeal            = useStore((s) => s.addMeal);
+  const currentDate        = useStore((s) => s.currentDate);
+  const locale             = useStore((s) => s.locale);
+  const saveMealTemplate   = useStore((s) => s.saveMealTemplate);
 
-  const [mealType, setMealType] = useState<MealType>(getMealTypeByTime());
-  const [mode, setMode] = useState<"select" | "photo" | "analyzing" | "review">("select");
+  const [mealType, setMealType]         = useState<MealType>(getMealTypeByTime());
+  const [mode, setMode]                 = useState<"select" | "photo" | "analyzing" | "review">("select");
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [analysis, setAnalysis] = useState<AIFoodAnalysis | null>(null);
-  const [foods, setFoods] = useState<MealFoodEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [userComment, setUserComment] = useState<string>("");
-  const [saving, setSaving] = useState(false);
+  const [analysis, setAnalysis]         = useState<AIFoodAnalysis | null>(null);
+  const [foods, setFoods]               = useState<MealFoodEntry[]>([]);
+  const [error, setError]               = useState<string | null>(null);
+  const [userComment, setUserComment]   = useState<string>("");
+  const [saving, setSaving]             = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const compressImage = useCallback(async (file: File): Promise<string> => {
@@ -78,9 +83,9 @@ export default function LogPage() {
         let h = img.height;
         if (w > MAX || h > MAX) {
           if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else { w = Math.round(w * MAX / h); h = MAX; }
+          else        { w = Math.round(w * MAX / h); h = MAX; }
         }
-        canvas.width = w;
+        canvas.width  = w;
         canvas.height = h;
         const ctx = canvas.getContext("2d")!;
         ctx.drawImage(img, 0, 0, w, h);
@@ -108,8 +113,8 @@ export default function LogPage() {
   const addMorePhotos = useCallback(() => {
     if (imagePreviews.length >= 3) return;
     const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
+    input.type    = "file";
+    input.accept  = "image/*";
     input.capture = "environment";
     input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
@@ -137,10 +142,10 @@ export default function LogPage() {
           ...f,
           servings: newServings,
           calories: f.calories * ratio,
-          protein: f.protein * ratio,
-          carbs: f.carbs * ratio,
-          fat: f.fat * ratio,
-          fiber: f.fiber * ratio,
+          protein:  f.protein  * ratio,
+          carbs:    f.carbs    * ratio,
+          fat:      f.fat      * ratio,
+          fiber:    f.fiber    * ratio,
         };
       })
     );
@@ -150,11 +155,59 @@ export default function LogPage() {
     setFoods((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // Called from FoodSearchModal → add a single food to the review list
+  function handleAddFoodFromSearch(food: MealFoodEntry) {
+    setFoods((prev) => [...prev, food]);
+    if (mode !== "review") setMode("review");
+  }
+
+  // Called from FoodSearchModal → load a full saved template
+  function handleLoadTemplate(templateFoods: MealFoodEntry[], templateType: MealType) {
+    setFoods(templateFoods);
+    setMealType(templateType);
+    setMode("review");
+  }
+
+  // Save current review foods as a reusable template
+  function handleSaveTemplate() {
+    if (foods.length === 0) return;
+    const totalCalories = foods.reduce((s, f) => s + f.calories, 0);
+    const totalProtein  = foods.reduce((s, f) => s + f.protein,  0);
+    const totalCarbs    = foods.reduce((s, f) => s + f.carbs,    0);
+    const totalFat      = foods.reduce((s, f) => s + f.fat,      0);
+
+    const template: SavedMealTemplate = {
+      id:           uuid(),
+      name:         getMealLabel(locale, mealType),
+      type:         mealType,
+      createdAt:    new Date().toISOString(),
+      totalCalories,
+      totalProtein,
+      totalCarbs,
+      totalFat,
+      foods: foods.map((f) => ({
+        name:        f.food.name,
+        brand:       f.food.brand,
+        servingSize: f.food.servingSize,
+        servingUnit: f.food.servingUnit,
+        servings:    f.servings,
+        calories:    f.calories,
+        protein:     f.protein,
+        carbs:       f.carbs,
+        fat:         f.fat,
+        fiber:       f.fiber,
+      })),
+    };
+
+    saveMealTemplate(template);
+    toast.success(locale === "es" ? "Comida guardada como plantilla" : "Meal saved as template");
+  }
+
   async function saveMeal() {
     if (foods.length === 0 || saving) return;
     setSaving(true);
 
-    const now = new Date();
+    const now  = new Date();
     const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
     try {
@@ -163,13 +216,13 @@ export default function LogPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           meal: {
-            type: mealType,
-            name: MEAL_LABELS[mealType],
+            type:       mealType,
+            name:       MEAL_LABELS[mealType],
             time,
             foods,
-            photoUrl: imagePreviews[0] ?? null,
+            photoUrl:   imagePreviews[0] ?? null,
             aiAnalyzed: !!analysis,
-            verified: true,
+            verified:   true,
           },
           date: currentDate,
         }),
@@ -182,15 +235,14 @@ export default function LogPage() {
 
       const { meal: saved } = await res.json();
 
-      // Construir MealEntry con el ID real de la BD
       const meal: MealEntry = {
-        id: saved.id,
-        type: saved.type as MealType,
-        name: saved.name,
-        time: saved.time,
-        photoUrl: saved.photoUrl ?? undefined,
+        id:         saved.id,
+        type:       saved.type as MealType,
+        name:       saved.name,
+        time:       saved.time,
+        photoUrl:   saved.photoUrl ?? undefined,
         aiAnalyzed: saved.aiAnalyzed,
-        verified: saved.verified,
+        verified:   saved.verified,
         foods: saved.foods.map((f: {
           id: string; name: string; servingSize: number; servingUnit: string;
           servings: number; calories: number; protein: number; carbs: number;
@@ -203,17 +255,17 @@ export default function LogPage() {
             servingSize: f.servingSize,
             servingUnit: f.servingUnit,
             calories: f.calories,
-            protein: f.protein,
-            carbs: f.carbs,
-            fat: f.fat,
-            fiber: f.fiber,
+            protein:  f.protein,
+            carbs:    f.carbs,
+            fat:      f.fat,
+            fiber:    f.fiber,
           },
-          servings: f.servings,
-          calories: f.calories,
-          protein: f.protein,
-          carbs: f.carbs,
-          fat: f.fat,
-          fiber: f.fiber,
+          servings:  f.servings,
+          calories:  f.calories,
+          protein:   f.protein,
+          carbs:     f.carbs,
+          fat:       f.fat,
+          fiber:     f.fiber,
         })),
       };
 
@@ -227,8 +279,19 @@ export default function LogPage() {
     }
   }
 
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
     <AppShell>
+      {/* Food Search Modal (full-screen overlay) */}
+      <FoodSearchModal
+        open={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        onAddFood={handleAddFoodFromSearch}
+        onLoadTemplate={handleLoadTemplate}
+        currentMealType={mealType}
+      />
+
       <div className="px-4 pt-6 safe-top space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -261,7 +324,7 @@ export default function LogPage() {
         </div>
 
         <AnimatePresence mode="wait">
-          {/* Mode: Select */}
+          {/* ── Mode: Select ─────────────────────────────────────────────── */}
           {mode === "select" && (
             <motion.div
               key="select"
@@ -270,11 +333,12 @@ export default function LogPage() {
               exit={{ opacity: 0, y: -12 }}
               className="space-y-3"
             >
+              {/* Take Photo */}
               <button
                 onClick={() => {
                   const input = document.createElement("input");
-                  input.type = "file";
-                  input.accept = "image/*";
+                  input.type    = "file";
+                  input.accept  = "image/*";
                   input.capture = "environment";
                   input.onchange = (e: any) => {
                     const file = e.target.files?.[0];
@@ -289,17 +353,30 @@ export default function LogPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-emerald-400">{t(locale, "log.takePhoto")}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {t(locale, "log.takePhotoDesc")}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t(locale, "log.takePhotoDesc")}</p>
                 </div>
                 <Sparkles className="ml-auto h-4 w-4 text-emerald-400/50" />
               </button>
 
+              {/* Search Food + Barcode */}
+              <button
+                onClick={() => setShowSearchModal(true)}
+                className="flex w-full items-center gap-4 rounded-2xl bg-indigo-500/10 p-5 text-left active:bg-indigo-500/15 transition-colors"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/20">
+                  <Search className="h-6 w-6 text-indigo-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-indigo-400">{t(locale, "log.searchFood")}</p>
+                  <p className="text-xs text-muted-foreground">{t(locale, "log.searchFoodDesc")}</p>
+                </div>
+              </button>
+
+              {/* Upload Photo */}
               <button
                 onClick={() => {
                   const input = document.createElement("input");
-                  input.type = "file";
+                  input.type   = "file";
                   input.accept = "image/*";
                   input.onchange = (e: any) => {
                     const file = e.target.files?.[0];
@@ -314,17 +391,13 @@ export default function LogPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold">{t(locale, "log.uploadPhoto")}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {t(locale, "log.uploadPhotoDesc")}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t(locale, "log.uploadPhotoDesc")}</p>
                 </div>
               </button>
 
+              {/* Manual Entry */}
               <button
-                onClick={() => {
-                  setFoods([]);
-                  setMode("review");
-                }}
+                onClick={() => { setFoods([]); setMode("review"); }}
                 className="flex w-full items-center gap-4 rounded-2xl bg-secondary/50 p-5 text-left active:bg-secondary transition-colors"
               >
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
@@ -332,15 +405,13 @@ export default function LogPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold">{t(locale, "log.manualEntry")}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {t(locale, "log.manualEntryDesc")}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t(locale, "log.manualEntryDesc")}</p>
                 </div>
               </button>
             </motion.div>
           )}
 
-          {/* Mode: Photo (before analysis) */}
+          {/* ── Mode: Photo (before analysis) ────────────────────────────── */}
           {mode === "photo" && (
             <motion.div
               key="photo"
@@ -373,7 +444,7 @@ export default function LogPage() {
                 )}
               </div>
 
-              {/* User Comment Input - BEFORE analysis */}
+              {/* User Comment — BEFORE analysis */}
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">
                   {t(locale, "log.addContext")}
@@ -389,11 +460,7 @@ export default function LogPage() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => {
-                    setMode("select");
-                    setImagePreviews([]);
-                    setUserComment("");
-                  }}
+                  onClick={() => { setMode("select"); setImagePreviews([]); setUserComment(""); }}
                   className="flex-1 rounded-xl bg-secondary py-3 text-sm font-medium active:bg-secondary/80 transition-colors"
                 >
                   {t(locale, "common.cancel")}
@@ -403,46 +470,41 @@ export default function LogPage() {
                     if (imagePreviews.length === 0) return;
                     setMode("analyzing");
                     setError(null);
-
                     try {
                       const res = await fetch("/api/analyze-food", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ 
+                        body: JSON.stringify({
                           images: imagePreviews,
-                          userComment: userComment || undefined 
+                          userComment: userComment || undefined,
                         }),
                       });
-
                       if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
                         throw new Error(errData.error || "Analysis failed");
                       }
-
                       const data: AIFoodAnalysis = await res.json();
                       setAnalysis(data);
-                      
                       const mapped: MealFoodEntry[] = data.foods.map((f) => ({
                         id: uuid(),
                         food: {
                           id: uuid(),
-                          name: f.name,
+                          name:        f.name,
                           servingSize: f.estimatedGrams,
                           servingUnit: "g",
-                          calories: f.calories,
-                          protein: f.protein,
-                          carbs: f.carbs,
-                          fat: f.fat,
-                          fiber: f.fiber,
+                          calories:    f.calories,
+                          protein:     f.protein,
+                          carbs:       f.carbs,
+                          fat:         f.fat,
+                          fiber:       f.fiber,
                         },
-                        servings: 1,
-                        calories: f.calories,
-                        protein: f.protein,
-                        carbs: f.carbs,
-                        fat: f.fat,
-                        fiber: f.fiber,
+                        servings:  1,
+                        calories:  f.calories,
+                        protein:   f.protein,
+                        carbs:     f.carbs,
+                        fat:       f.fat,
+                        fiber:     f.fiber,
                       }));
-                      
                       setFoods(mapped);
                       setMode("review");
                     } catch (err: any) {
@@ -461,7 +523,7 @@ export default function LogPage() {
             </motion.div>
           )}
 
-          {/* Mode: Analyzing */}
+          {/* ── Mode: Analyzing ──────────────────────────────────────────── */}
           {mode === "analyzing" && (
             <motion.div
               key="analyzing"
@@ -482,14 +544,12 @@ export default function LogPage() {
               <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
               <div className="text-center">
                 <p className="text-sm font-semibold">{t(locale, "log.analyzing")}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t(locale, "log.analyzingDesc")}
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{t(locale, "log.analyzingDesc")}</p>
               </div>
             </motion.div>
           )}
 
-          {/* Mode: Review */}
+          {/* ── Mode: Review ─────────────────────────────────────────────── */}
           {mode === "review" && (
             <motion.div
               key="review"
@@ -527,40 +587,42 @@ export default function LogPage() {
 
               {/* Food Items */}
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {foods.length > 0
-                    ? `${foods.length} ${t(locale, "log.itemsDetected")}`
-                    : t(locale, "log.addManually")}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {foods.length > 0
+                      ? `${foods.length} ${t(locale, "log.itemsDetected")}`
+                      : t(locale, "log.addManually")}
+                  </p>
+                  {/* Add more from search */}
+                  <button
+                    onClick={() => setShowSearchModal(true)}
+                    className="flex items-center gap-1 text-[10px] font-medium text-indigo-400 active:text-indigo-300"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {locale === "es" ? "Agregar más" : "Add more"}
+                  </button>
+                </div>
 
                 {foods.map((f, i) => (
-                  <div
-                    key={f.id}
-                    className="glass-card rounded-xl p-3 space-y-2"
-                  >
+                  <div key={f.id} className="glass-card rounded-xl p-3 space-y-2">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">
-                          {f.food.name}
-                        </p>
+                        <p className="text-sm font-semibold truncate">{f.food.name}</p>
+                        {f.food.brand && (
+                          <p className="text-[10px] text-muted-foreground">{f.food.brand}</p>
+                        )}
                         <p className="text-[10px] text-muted-foreground">
                           {Math.round(f.food.servingSize * f.servings)}g
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => adjustServing(i, -1)}
-                          className="p-1 rounded-lg bg-secondary"
-                        >
+                        <button onClick={() => adjustServing(i, -1)} className="p-1 rounded-lg bg-secondary">
                           <Minus className="h-3 w-3" />
                         </button>
                         <span className="w-8 text-center text-xs font-medium tabular-nums">
                           {f.servings.toFixed(2)}
                         </span>
-                        <button
-                          onClick={() => adjustServing(i, 1)}
-                          className="p-1 rounded-lg bg-secondary"
-                        >
+                        <button onClick={() => adjustServing(i, 1)} className="p-1 rounded-lg bg-secondary">
                           <Plus className="h-3 w-3" />
                         </button>
                         <button
@@ -572,18 +634,10 @@ export default function LogPage() {
                       </div>
                     </div>
                     <div className="flex gap-3 text-[10px]">
-                      <span className="text-emerald-400 tabular-nums">
-                        {Math.round(f.calories)} kcal
-                      </span>
-                      <span className="text-indigo-400 tabular-nums">
-                        P {Math.round(f.protein)}g
-                      </span>
-                      <span className="text-amber-400 tabular-nums">
-                        C {Math.round(f.carbs)}g
-                      </span>
-                      <span className="text-red-400 tabular-nums">
-                        F {Math.round(f.fat)}g
-                      </span>
+                      <span className="text-emerald-400 tabular-nums">{Math.round(f.calories)} kcal</span>
+                      <span className="text-indigo-400 tabular-nums">P {Math.round(f.protein)}g</span>
+                      <span className="text-amber-400 tabular-nums">C {Math.round(f.carbs)}g</span>
+                      <span className="text-red-400 tabular-nums">F {Math.round(f.fat)}g</span>
                     </div>
                   </div>
                 ))}
@@ -628,6 +682,18 @@ export default function LogPage() {
                 >
                   <X className="h-5 w-5" />
                 </button>
+
+                {/* Save as template */}
+                {foods.length > 0 && (
+                  <button
+                    onClick={handleSaveTemplate}
+                    className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary text-muted-foreground active:text-emerald-400"
+                    title={locale === "es" ? "Guardar como plantilla" : "Save as template"}
+                  >
+                    <BookmarkPlus className="h-5 w-5" />
+                  </button>
+                )}
+
                 <button
                   onClick={saveMeal}
                   disabled={foods.length === 0 || saving}

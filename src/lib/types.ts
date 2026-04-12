@@ -124,6 +124,36 @@ export interface AIFoodAnalysis {
   energyCheck?: string;
 }
 
+/** Result from OpenFoodFacts search/barcode lookup, normalized to FoodItem shape */
+export interface FoodSearchResult extends FoodItem {
+  barcode?: string;
+  imageUrl?: string;
+}
+
+/** A saved meal template (no IDs on foods — they get new IDs when instantiated) */
+export interface SavedMealTemplate {
+  id: string;
+  name: string;
+  type: MealType;
+  foods: {
+    name: string;
+    brand?: string;
+    servingSize: number;
+    servingUnit: string;
+    servings: number;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+  }[];
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+  createdAt: string;
+}
+
 export interface SavedShake {
   id: string;
   name: string;

@@ -1,5 +1,5 @@
 // Sync user data from database to local store after login
-import { useStore } from "./store";
+import { useStore, markStoreHydrated } from "./store";
 import type { DayLog, MealEntry, MealFoodEntry } from "./types";
 
 export async function syncUserDataFromServer() {
@@ -141,6 +141,11 @@ export async function syncUserDataFromServer() {
       }
     } catch {
       // Non-critical
+    }
+
+    // Mark store as hydrated so future state changes get persisted
+    if (profileLoaded) {
+      markStoreHydrated();
     }
 
     return profileLoaded;

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
-import { useStore, useAuthStore, saveUserStore } from "@/lib/store";
+import { useStore, useAuthStore, saveUserStore, switchUserStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { t, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -18,10 +18,15 @@ export default function SettingsPage() {
   const setUserId = useAuthStore((s) => s.setUserId);
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    // Persist latest state before clearing auth (safety net)
+    // 1. Persist latest state before clearing anything (safety net)
     saveUserStore();
+    // 2. Clear server cookie
+    await fetch("/api/auth/logout", { method: "POST" });
+    // 3. Clear auth state
     setUserId(null);
+    // 4. Clear app store in memory (privacy: don't leave data in memory)
+    switchUserStore(null);
+    // 5. Navigate to auth
     router.replace("/auth");
   }
 

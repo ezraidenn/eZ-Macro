@@ -57,6 +57,7 @@ export default function RecommendationsPage() {
   const router = useRouter();
   const locale = useStore((s) => s.locale);
   const targets = useStore((s) => s.targets);
+  const profile = useStore((s) => s.profile);
   const currentDate = useStore((s) => s.currentDate);
   const getLogForDate = useStore((s) => s.getLogForDate);
   const addMeal = useStore((s) => s.addMeal);
@@ -93,6 +94,8 @@ export default function RecommendationsPage() {
           mealsEaten: log.meals,
           locale,
           priorities,
+          targets,
+          profile: profile ? { goalType: profile.goalType, trainingLevel: profile.trainingLevel } : undefined,
         }),
       });
 

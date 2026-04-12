@@ -126,6 +126,11 @@ const translations = {
     "log.addContext": "Agregar contexto (opcional)",
     "log.contextPlaceholder": "💡 Para mayor precisión, incluye una referencia: lata de refresco, tarjeta INE, tu mano abierta, o cubiertos. También describe porciones: 'medio plato', '6 tortillas', 'con piel', etc.",
     "log.analyzePhoto": "Analizar Foto",
+    "log.searchFood": "Buscar Alimento",
+    "log.searchFoodDesc": "Base de datos + escáner de código de barras",
+    "log.perServing": "Por porción",
+    "log.saveTemplate": "Guardar como plantilla",
+    "log.templateSaved": "Comida guardada como plantilla",
     "common.cancel": "Cancelar",
 
     // Meal types
@@ -358,6 +363,11 @@ const translations = {
     "log.addContext": "Add context (optional)",
     "log.contextPlaceholder": "💡 For better accuracy, include a reference: soda can, credit card, your open hand, or utensils. Also describe portions: 'half plate', '6 tortillas', 'with skin', etc.",
     "log.analyzePhoto": "Analyze Photo",
+    "log.searchFood": "Search Food",
+    "log.searchFoodDesc": "Food database + barcode scanner",
+    "log.perServing": "Per serving",
+    "log.saveTemplate": "Save as template",
+    "log.templateSaved": "Meal saved as template",
     "common.cancel": "Cancel",
 
     // Meal types
