@@ -107,15 +107,22 @@ export async function syncUserDataFromServer() {
         (dbMeals as DbMeal[]).map(m => `${m.date}|${m.name}|${m.time}`)
       );
 
+      console.log("[sync] Server signatures:", Array.from(serverMealSignatures));
+      console.log("[sync] Local meals to check:", localMeals.map(({meal, date}) => ({id: meal.id.slice(0,8), name: meal.name, time: meal.time, date, sig: `${date}|${meal.name}|${meal.time}`})));
+
       const missingLocalMeals = localMeals.filter(({ meal, date }) => {
         // Skip if ID already exists in server
-        if (serverMealIds.has(meal.id)) return false;
+        if (serverMealIds.has(meal.id)) {
+          console.log(`[sync] Skipping by ID match: ${meal.name}`);
+          return false;
+        }
         // Skip if content signature matches a server meal (avoid duplicates)
         const signature = `${date}|${meal.name}|${meal.time}`;
         if (serverMealSignatures.has(signature)) {
-          console.log(`[sync] Skipping duplicate by content: ${meal.name} at ${meal.time}`);
+          console.log(`[sync] Skipping duplicate by content: ${meal.name} at ${meal.time} (sig: ${signature})`);
           return false;
         }
+        console.log(`[sync] Will upload: ${meal.name} at ${meal.time} (sig: ${signature} not in server)`);
         return true;
       });
 
