@@ -22,14 +22,23 @@ export function StoreHydrator() {
   const lastSyncedUserId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
+    console.log("[StoreHydrator] Effect running:", { hasHydrated, userId, isStoreHydrated: isStoreHydrated() });
+
     // Wait for auth store to hydrate from localStorage
-    if (!hasHydrated) return;
+    if (!hasHydrated) {
+      console.log("[StoreHydrator] Waiting for auth store to hydrate...");
+      return;
+    }
 
     // Avoid re-running for the same userId
-    if (lastSyncedUserId.current === userId) return;
+    if (lastSyncedUserId.current === userId) {
+      console.log("[StoreHydrator] Already synced for this userId, skipping");
+      return;
+    }
     lastSyncedUserId.current = userId;
 
     if (!userId) {
+      console.log("[StoreHydrator] No userId, resetting store");
       // Not logged in — reset store if it hasn't been already
       if (!isStoreHydrated()) return;
       switchUserStore(null);
@@ -38,11 +47,19 @@ export function StoreHydrator() {
 
     // User is logged in — hydrate store from localStorage + DB
     if (!isStoreHydrated()) {
+      console.log("[StoreHydrator] Hydrating store for user:", userId);
       switchUserStore(userId);
-      syncUserDataFromServer().catch(() => {
-        // Sync failed, but switchUserStore already loaded from localStorage
-        // so we have at least cached data.
+      console.log("[StoreHydrator] After switchUserStore, isStoreHydrated:", isStoreHydrated());
+      console.log("[StoreHydrator] Current dayLogs:", useStore.getState().dayLogs);
+
+      syncUserDataFromServer().then((success) => {
+        console.log("[StoreHydrator] syncUserDataFromServer completed:", success);
+        console.log("[StoreHydrator] dayLogs after sync:", useStore.getState().dayLogs);
+      }).catch((err) => {
+        console.error("[StoreHydrator] syncUserDataFromServer failed:", err);
       });
+    } else {
+      console.log("[StoreHydrator] Store already hydrated, skipping");
     }
   }, [hasHydrated, userId]);
 

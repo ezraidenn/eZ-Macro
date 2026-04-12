@@ -279,24 +279,29 @@ export const useStore = create<AppState>()(
 // ─── Helper: Switch user data store ─────────────────────────────────
 // When userId changes, we need to reload the store from the correct localStorage key
 export function switchUserStore(userId: string | null) {
+  console.log("[switchUserStore] Called with userId:", userId);
   // Mark as not hydrated while switching — prevents subscribe from saving
   // empty/intermediate state to the per-user key.
   _storeHydrated = false;
 
   if (!userId) {
     // Logout: clear store in memory, don't touch any per-user key
+    console.log("[switchUserStore] No userId, resetting store");
     useStore.getState().resetUserData();
     return;
   }
 
   const storeName = `ezmacro-data-${userId}`;
+  console.log("[switchUserStore] Looking for localStorage key:", storeName);
 
   // Try to load existing data for this user from localStorage
   try {
     const raw = localStorage.getItem(storeName);
+    console.log("[switchUserStore] localStorage raw data:", raw ? "found" : "not found");
     if (raw) {
       const parsed = JSON.parse(raw);
       const state = parsed?.state;
+      console.log("[switchUserStore] Parsed state has dayLogs:", Object.keys(state?.dayLogs || {}).length, "dates");
       if (state) {
         useStore.setState({
           locale: state.locale || "es",
@@ -315,17 +320,20 @@ export function switchUserStore(userId: string | null) {
           useStore.getState().recalculateTDEE();
         }
         _storeHydrated = true;
+        const dayLogCount = Object.keys(state.dayLogs || {}).length;
+        console.log("[switchUserStore] Store loaded from localStorage, dayLogs:", dayLogCount);
         return;
       }
     }
   } catch (e) {
-    console.error("Failed to load user store:", e);
+    console.error("[switchUserStore] Failed to load user store:", e);
   }
 
   // No existing data for this user — start from defaults.
   // Do NOT call resetUserData here: it would trigger the subscribe,
   // which would save empty state. Instead, just leave defaults and
   // wait for syncUserDataFromServer to populate from DB.
+  console.log("[switchUserStore] No data found, resetting to defaults");
   useStore.getState().resetUserData();
   // Don't mark as hydrated yet — wait for sync to finish
 }
@@ -333,13 +341,22 @@ export function switchUserStore(userId: string | null) {
 // ─── Helper: Save current store to user-specific key ────────────────
 export function saveUserStore() {
   // Guard: don't save until the store has been properly loaded
-  if (!_storeHydrated) return;
+  if (!_storeHydrated) {
+    console.log("[saveUserStore] Skipping save - store not hydrated yet");
+    return;
+  }
 
   const userId = useAuthStore.getState().userId;
-  if (!userId) return;
+  if (!userId) {
+    console.log("[saveUserStore] Skipping save - no userId");
+    return;
+  }
   
   const storeName = `ezmacro-data-${userId}`;
   const state = useStore.getState();
+  const mealCount = Object.values(state.dayLogs || {}).reduce((acc, log) => acc + (log.meals?.length || 0), 0);
+  console.log("[saveUserStore] Saving to", storeName, "- meals:", mealCount);
+  
   const dataToSave = {
     state: {
       locale: state.locale,
@@ -358,8 +375,9 @@ export function saveUserStore() {
   
   try {
     localStorage.setItem(storeName, JSON.stringify(dataToSave));
+    console.log("[saveUserStore] Saved successfully");
   } catch (e) {
-    console.error("Failed to save user store:", e);
+    console.error("[saveUserStore] Failed to save user store:", e);
   }
 }
 
