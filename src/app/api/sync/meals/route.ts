@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
 
     const { meal, date } = parsed.data;
 
+    console.log("[MEALS API] Creating meal for user:", session.userId, "-", meal.name);
+
     const created = await prisma.mealEntry.create({
       data: {
         userId: session.userId,
@@ -95,6 +97,7 @@ export async function POST(req: NextRequest) {
       include: { foods: true },
     });
 
+    console.log("[MEALS API] Created meal:", created.id, "with", created.foods.length, "foods");
     return NextResponse.json({ success: true, meal: created });
   } catch (error) {
     console.error("[MEALS API] Error creating meal:", error);

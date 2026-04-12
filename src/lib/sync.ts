@@ -101,28 +101,49 @@ export async function syncUserDataFromServer() {
         serverMealIds.add(dbMeal.id);
       });
 
-      // Find local meals not in server (by ID)
-      const missingLocalMeals = localMeals.filter(
-        ({ meal }) => !serverMealIds.has(meal.id)
+      // Find local meals not in server by ID
+      // Also check by content (date, name, time) to avoid duplicates from ID mismatches
+      const serverMealSignatures = new Set(
+        (dbMeals as DbMeal[]).map(m => `${m.date}|${m.name}|${m.time}`)
       );
 
-      // Upload missing local meals to server
+      const missingLocalMeals = localMeals.filter(({ meal, date }) => {
+        // Skip if ID already exists in server
+        if (serverMealIds.has(meal.id)) return false;
+        // Skip if content signature matches a server meal (avoid duplicates)
+        const signature = `${date}|${meal.name}|${meal.time}`;
+        if (serverMealSignatures.has(signature)) {
+          console.log(`[sync] Skipping duplicate by content: ${meal.name} at ${meal.time}`);
+          return false;
+        }
+        return true;
+      });
+
+      // Upload truly missing local meals to server (with delay between requests)
       if (missingLocalMeals.length > 0) {
-        console.log(`[sync] Uploading ${missingLocalMeals.length} local meals to server`);
-        await Promise.all(
-          missingLocalMeals.map(({ meal, date }) =>
-            fetch("/api/sync/meals", {
+        console.log(`[sync] Uploading ${missingLocalMeals.length} truly missing meals to server`);
+        for (const { meal, date } of missingLocalMeals) {
+          try {
+            const res = await fetch("/api/sync/meals", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ meal, date }),
-            }).catch((err) => {
-              console.error("[sync] Failed to upload meal:", meal.id, err);
-            })
-          )
-        );
+            });
+            if (!res.ok) {
+              console.error("[sync] Failed to upload meal:", meal.id, await res.text());
+            } else {
+              const saved = await res.json();
+              // Update local meal ID to match server ID
+              meal.id = saved.meal.id;
+              console.log(`[sync] Uploaded meal: ${meal.name} -> server ID: ${saved.meal.id}`);
+            }
+          } catch (err) {
+            console.error("[sync] Error uploading meal:", meal.id, err);
+          }
+        }
       }
 
-      // Add missing local meals to merged dayLogs
+      // Add truly missing local meals to merged dayLogs
       missingLocalMeals.forEach(({ meal, date }) => {
         if (!mergedDayLogs[date]) {
           mergedDayLogs[date] = {
