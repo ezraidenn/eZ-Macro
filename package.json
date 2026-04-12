@@ -9,7 +9,8 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "lint": "next lint",
-    "postinstall": "npx prisma generate"
+    "postinstall": "npx prisma generate",
+    "db:check": "npx ts-node --transpile-only scripts/check-db.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

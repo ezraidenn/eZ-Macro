@@ -229,11 +229,15 @@ export default function LogPage() {
       });
 
       if (!res.ok) {
-        toast.error(t(locale, "log.saveError"));
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        console.error("[saveMeal] API error:", res.status, errorData);
+        toast.error(t(locale, "log.saveError") + ": " + (errorData.error || res.status));
         return;
       }
 
-      const { meal: saved } = await res.json();
+      const responseData = await res.json();
+      console.log("[saveMeal] API success:", responseData);
+      const { meal: saved } = responseData;
 
       const meal: MealEntry = {
         id:         saved.id,

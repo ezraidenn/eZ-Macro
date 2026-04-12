@@ -96,8 +96,10 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, meal: created });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    console.error("[MEALS API] Error creating meal:", error);
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
