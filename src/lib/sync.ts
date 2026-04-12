@@ -36,91 +36,122 @@ export async function syncUserDataFromServer() {
       const mealsData = await mealsRes.json();
       const dbMeals: unknown[] = mealsData.meals ?? [];
 
-      if (dbMeals.length === 0) {
-        // DB is empty — try to rescue meals that are only in localStorage
-        const localDayLogs = useStore.getState().dayLogs;
-        const localMeals = Object.entries(localDayLogs).flatMap(
-          ([date, log]) => log.meals.map((meal) => ({ meal, date }))
-        );
+      // Get local meals before any modifications
+      const localDayLogs = useStore.getState().dayLogs;
+      const localMeals = Object.entries(localDayLogs).flatMap(
+        ([date, log]) => log.meals.map((meal) => ({ meal, date }))
+      );
 
-        if (localMeals.length > 0) {
-          // Upload all local meals to DB (fire and forget)
-          localMeals.forEach(({ meal, date }) => {
-            fetch("/api/sync/meals", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ meal, date }),
-            }).catch(() => {});
-          });
-          // Keep localStorage state as-is — it has the meals
+      // Create a map of all meals (server + local) to avoid duplicates
+      const mergedDayLogs: Record<string, DayLog> = {};
+      const serverMealIds = new Set<string>();
+
+      type DbMeal = {
+        id: string; date: string; type: string; name: string; time: string;
+        photoUrl: string | null; aiAnalyzed: boolean; verified: boolean;
+        foods: Array<{
+          id: string; name: string; servingSize: number; servingUnit: string;
+          servings: number; calories: number; protein: number; carbs: number;
+          fat: number; fiber: number;
+        }>;
+      };
+
+      // First, add all server meals
+      (dbMeals as DbMeal[]).forEach((dbMeal) => {
+        const date = dbMeal.date;
+        if (!mergedDayLogs[date]) {
+          mergedDayLogs[date] = {
+            date,
+            meals: [],
+            totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+          };
         }
-        // If both DB and localStorage are empty, nothing to do
-      } else {
-        // DB has meals — rebuild dayLogs from server (source of truth)
-        const dayLogs: Record<string, DayLog> = {};
 
-        type DbMeal = {
-          id: string; date: string; type: string; name: string; time: string;
-          photoUrl: string | null; aiAnalyzed: boolean; verified: boolean;
-          foods: Array<{
-            id: string; name: string; servingSize: number; servingUnit: string;
-            servings: number; calories: number; protein: number; carbs: number;
-            fat: number; fiber: number;
-          }>;
-        };
-        (dbMeals as DbMeal[]).forEach((dbMeal) => {
-          const date = dbMeal.date;
-          if (!dayLogs[date]) {
-            dayLogs[date] = {
-              date,
-              meals: [],
-              totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
-            };
-          }
-
-          const meal: MealEntry = {
-            id: dbMeal.id,
-            type: dbMeal.type as MealEntry["type"],
-            name: dbMeal.name,
-            time: dbMeal.time,
-            photoUrl: dbMeal.photoUrl ?? undefined,
-            aiAnalyzed: dbMeal.aiAnalyzed,
-            verified: dbMeal.verified,
-            foods: dbMeal.foods.map((f): MealFoodEntry => ({
+        const meal: MealEntry = {
+          id: dbMeal.id,
+          type: dbMeal.type as MealEntry["type"],
+          name: dbMeal.name,
+          time: dbMeal.time,
+          photoUrl: dbMeal.photoUrl ?? undefined,
+          aiAnalyzed: dbMeal.aiAnalyzed,
+          verified: dbMeal.verified,
+          foods: dbMeal.foods.map((f): MealFoodEntry => ({
+            id: f.id,
+            food: {
               id: f.id,
-              food: {
-                id: f.id,
-                name: f.name,
-                servingSize: f.servingSize,
-                servingUnit: f.servingUnit,
-                calories: f.calories,
-                protein: f.protein,
-                carbs: f.carbs,
-                fat: f.fat,
-                fiber: f.fiber,
-              },
-              servings: f.servings,
+              name: f.name,
+              servingSize: f.servingSize,
+              servingUnit: f.servingUnit,
               calories: f.calories,
               protein: f.protein,
               carbs: f.carbs,
               fat: f.fat,
               fiber: f.fiber,
-            })),
-          };
+            },
+            servings: f.servings,
+            calories: f.calories,
+            protein: f.protein,
+            carbs: f.carbs,
+            fat: f.fat,
+            fiber: f.fiber,
+          })),
+        };
 
-          dayLogs[date].meals.push(meal);
+        mergedDayLogs[date].meals.push(meal);
+        serverMealIds.add(dbMeal.id);
+      });
+
+      // Find local meals not in server (by ID)
+      const missingLocalMeals = localMeals.filter(
+        ({ meal }) => !serverMealIds.has(meal.id)
+      );
+
+      // Upload missing local meals to server
+      if (missingLocalMeals.length > 0) {
+        console.log(`[sync] Uploading ${missingLocalMeals.length} local meals to server`);
+        await Promise.all(
+          missingLocalMeals.map(({ meal, date }) =>
+            fetch("/api/sync/meals", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ meal, date }),
+            }).catch((err) => {
+              console.error("[sync] Failed to upload meal:", meal.id, err);
+            })
+          )
+        );
+      }
+
+      // Add missing local meals to merged dayLogs
+      missingLocalMeals.forEach(({ meal, date }) => {
+        if (!mergedDayLogs[date]) {
+          mergedDayLogs[date] = {
+            date,
+            meals: [],
+            totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+          };
+        }
+        mergedDayLogs[date].meals.push(meal);
+      });
+
+      // Recalculate totals for all dayLogs
+      Object.values(mergedDayLogs).forEach((dayLog) => {
+        dayLog.totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+        dayLog.meals.forEach((meal) => {
           meal.foods.forEach((f) => {
-            dayLogs[date].totals.calories += f.calories;
-            dayLogs[date].totals.protein += f.protein;
-            dayLogs[date].totals.carbs += f.carbs;
-            dayLogs[date].totals.fat += f.fat;
-            dayLogs[date].totals.fiber += f.fiber;
+            dayLog.totals.calories += f.calories;
+            dayLog.totals.protein += f.protein;
+            dayLog.totals.carbs += f.carbs;
+            dayLog.totals.fat += f.fat;
+            dayLog.totals.fiber += f.fiber;
           });
         });
+      });
 
-        useStore.setState({ dayLogs });
-      }
-    } catch {
+      useStore.setState({ dayLogs: mergedDayLogs });
+      console.log("[sync] Merged dayLogs:", Object.keys(mergedDayLogs).length, "dates,", Object.values(mergedDayLogs).reduce((acc, d) => acc + d.meals.length, 0), "meals");
+    } catch (err) {
+      console.error("[sync] Meals sync error:", err);
       // Non-critical — keep whatever is in localStorage
     }
 
