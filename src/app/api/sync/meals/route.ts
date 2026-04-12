@@ -36,7 +36,7 @@ const mealSchema = z.object({
   type: z.enum(["breakfast", "lunch", "dinner", "snack"]),
   name: z.string().min(1).max(200),
   time: z.string().regex(/^\d{2}:\d{2}$/),
-  photoUrl: z.string().nullable().optional(),
+  photoUrl: z.string().max(2097152).nullable().optional(), // 2MB base64 cap (~1.5MB image)
   aiAnalyzed: z.boolean().optional(),
   verified: z.boolean().optional(),
   foods: z.array(foodEntrySchema).min(1),
@@ -105,16 +105,20 @@ export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const date = searchParams.get("date");
+  try {
+    const { searchParams } = new URL(req.url);
+    const date = searchParams.get("date");
 
-  const meals = await prisma.mealEntry.findMany({
-    where: { userId: session.userId, ...(date ? { date } : {}) },
-    include: { foods: true },
-    orderBy: { createdAt: "asc" },
-  });
+    const meals = await prisma.mealEntry.findMany({
+      where: { userId: session.userId, ...(date ? { date } : {}) },
+      include: { foods: true },
+      orderBy: { createdAt: "asc" },
+    });
 
-  return NextResponse.json({ meals });
+    return NextResponse.json({ meals });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: NextRequest) {

@@ -239,15 +239,13 @@ export const useStore = create<AppState>()(
       },
     }),
     {
-      name: getUserStorageName(),
+      // Fixed key — actual per-user read/write is handled exclusively by
+      // switchUserStore() and saveUserStore(). skipHydration prevents the
+      // middleware from auto-loading the wrong key on startup.
+      name: "ezmacro-data-anonymous",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      // Always reset currentDate to today on rehydration
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          state.setCurrentDate(formatDateKey(new Date()));
-        }
-      },
+      skipHydration: true,
     }
   )
 );

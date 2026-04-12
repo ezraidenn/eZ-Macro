@@ -72,12 +72,20 @@ export default function ProfilePage() {
     setProfile(profileData);
 
     try {
-      await fetch("/api/sync/profile", {
+      const res = await fetch("/api/sync/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profileData),
       });
-    } catch {}
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? t(locale, "auth.genericError"));
+        return;
+      }
+    } catch {
+      toast.error(t(locale, "auth.genericError"));
+      return;
+    }
 
     toast.success(t(locale, "profile.updated"));
   }
@@ -146,7 +154,7 @@ export default function ProfilePage() {
           transition={{ delay: 0.05 }}
           className="space-y-4"
         >
-          <Field label="Name" icon={User}>
+          <Field label={t(locale, "onboarding.name")} icon={User}>
             <input
               type="text"
               value={name}
@@ -155,7 +163,7 @@ export default function ProfilePage() {
             />
           </Field>
 
-          <Field label="Gender" icon={User}>
+          <Field label={t(locale, "onboarding.gender")} icon={User}>
             <div className="flex gap-2">
               {(["male", "female"] as Gender[]).map((g) => (
                 <button
@@ -175,7 +183,7 @@ export default function ProfilePage() {
           </Field>
 
           <div className="grid grid-cols-3 gap-3">
-            <Field label="Age" icon={User}>
+            <Field label={t(locale, "onboarding.age")} icon={User}>
               <input
                 type="number"
                 value={age}
@@ -183,7 +191,7 @@ export default function ProfilePage() {
                 className="input-field text-center"
               />
             </Field>
-            <Field label="Height (cm)" icon={Ruler}>
+            <Field label={t(locale, "onboarding.height")} icon={Ruler}>
               <input
                 type="number"
                 value={height}
@@ -191,7 +199,7 @@ export default function ProfilePage() {
                 className="input-field text-center"
               />
             </Field>
-            <Field label="Weight (kg)" icon={Ruler}>
+            <Field label={t(locale, "onboarding.weight")} icon={Ruler}>
               <input
                 type="number"
                 value={weight}
@@ -201,7 +209,7 @@ export default function ProfilePage() {
             </Field>
           </div>
 
-          <Field label="Activity Level" icon={Activity}>
+          <Field label={t(locale, "onboarding.activityTitle")} icon={Activity}>
             <select
               value={activityLevel}
               onChange={(e) => setActivityLevel(e.target.value as ActivityLevel)}
@@ -209,34 +217,34 @@ export default function ProfilePage() {
             >
               {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((l) => (
                 <option key={l} value={l}>
-                  {ACTIVITY_LABELS[l]}
+                  {getActivityLabel(locale, l)}
                 </option>
               ))}
             </select>
           </Field>
 
-          <Field label="Training Level" icon={Dumbbell}>
+          <Field label={t(locale, "onboarding.trainingExp")} icon={Dumbbell}>
             <div className="flex gap-2">
               {(["beginner", "intermediate", "advanced"] as TrainingLevel[]).map(
-                (t) => (
+                (lvl) => (
                   <button
-                    key={t}
-                    onClick={() => setTrainingLevel(t)}
+                    key={lvl}
+                    onClick={() => setTrainingLevel(lvl)}
                     className={cn(
                       "flex-1 rounded-xl py-2.5 text-xs font-medium capitalize transition-all",
-                      trainingLevel === t
+                      trainingLevel === lvl
                         ? "bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30"
                         : "bg-secondary text-muted-foreground"
                     )}
                   >
-                    {t}
+                    {getTrainingLabel(locale, lvl)}
                   </button>
                 )
               )}
             </div>
           </Field>
 
-          <Field label="Goal" icon={Target}>
+          <Field label={t(locale, "onboarding.goalTitle")} icon={Target}>
             <div className="grid grid-cols-2 gap-2">
               {(Object.keys(GOAL_LABELS) as GoalType[]).map((g) => (
                 <button
@@ -249,7 +257,7 @@ export default function ProfilePage() {
                       : "bg-secondary text-muted-foreground"
                   )}
                 >
-                  {GOAL_LABELS[g]}
+                  {getGoalLabel(locale, g)}
                 </button>
               ))}
             </div>

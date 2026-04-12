@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 import { useStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { CalorieBar } from "@/components/ui/calorie-bar";
@@ -41,7 +42,21 @@ export default function DashboardPage() {
   const weights = useStore((s) => s.weights);
   const locale = useStore((s) => s.locale);
 
-  if (!profile || !targets) return null;
+  if (!profile || !targets) {
+    return (
+      <AppShell>
+        <div className="px-4 pt-6 safe-top space-y-5 animate-pulse">
+          <div className="h-10 w-40 rounded-xl bg-secondary" />
+          <div className="glass-card rounded-2xl p-5 h-24" />
+          <div className="glass-card rounded-2xl p-5 h-28" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-20 rounded-2xl bg-secondary" />
+            <div className="h-20 rounded-2xl bg-secondary" />
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   const log = dayLogs[currentDate] ?? { date: currentDate, meals: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 } };
   const totals = log.totals;
@@ -49,18 +64,31 @@ export default function DashboardPage() {
   const isToday = currentDate === today;
 
   const latestWeight = weights.length > 0 ? weights[weights.length - 1] : null;
-  const weeklyChange =
-    weights.length >= 7
-      ? weights[weights.length - 1].weight - weights[weights.length - 7].weight
-      : null;
+  const weeklyChange = (() => {
+    if (weights.length < 2) return null;
+    const latest = weights[weights.length - 1];
+    const sevenDaysAgo = new Date(latest.date + "T12:00:00");
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoStr = formatDateKey(sevenDaysAgo);
+    const older = weights.find((w) => w.date >= sevenDaysAgoStr);
+    return older ? latest.weight - older.weight : null;
+  })();
 
   function handleDeleteMeal(mealId: string) {
+    const mealToDelete = log.meals.find((m) => m.id === mealId);
     removeMeal(currentDate, mealId); // optimistic
+
     fetch("/api/sync/meals", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mealId }),
-    }).catch(() => {});
+    }).catch(() => {
+      // Rollback: restore the meal if the API call fails
+      if (mealToDelete) {
+        useStore.getState().addMeal(currentDate, mealToDelete);
+        toast.error(t(locale, "dashboard.deleteFailed"));
+      }
+    });
   }
 
   function shiftDate(days: number) {

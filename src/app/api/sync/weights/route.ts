@@ -42,10 +42,13 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const weights = await prisma.weightEntry.findMany({
-    where: { userId: session.userId },
-    orderBy: { date: "asc" },
-  });
-
-  return NextResponse.json({ weights });
+  try {
+    const weights = await prisma.weightEntry.findMany({
+      where: { userId: session.userId },
+      orderBy: { date: "asc" },
+    });
+    return NextResponse.json({ weights });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import { v4 as uuid } from "uuid";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/lib/store";
@@ -66,9 +67,11 @@ export default function LogPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const compressImage = useCallback(async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
         const canvas = document.createElement("canvas");
         const MAX = 1024;
         let w = img.width;
@@ -83,7 +86,11 @@ export default function LogPage() {
         ctx.drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL("image/jpeg", 0.7));
       };
-      img.src = URL.createObjectURL(file);
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Failed to load image"));
+      };
+      img.src = objectUrl;
     });
   }, []);
 

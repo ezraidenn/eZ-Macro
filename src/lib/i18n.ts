@@ -104,6 +104,7 @@ const translations = {
     "dashboard.weeklyChange": "Cambio Semanal",
     "dashboard.last7days": "Últimos 7 días",
     "dashboard.noData": "Sin datos",
+    "dashboard.deleteFailed": "Error al eliminar la comida",
 
     // Log
     "log.title": "Registrar Comida",
@@ -335,6 +336,7 @@ const translations = {
     "dashboard.weeklyChange": "Weekly Change",
     "dashboard.last7days": "Last 7 days",
     "dashboard.noData": "No data yet",
+    "dashboard.deleteFailed": "Failed to delete meal",
 
     // Log
     "log.title": "Log Meal",

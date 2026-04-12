@@ -1,0 +1,253 @@
+import { NextRequest } from "next/server";
+import { POST, GET, DELETE } from "@/app/api/sync/meals/route";
+
+// ─── Mocks ───────────────────────────────────────────────────────────────────
+
+jest.mock("@/lib/auth", () => ({
+  getSession: jest.fn(),
+}));
+
+jest.mock("@/lib/prisma", () => ({
+  prisma: {
+    mealEntry: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+  },
+}));
+
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+const mockGetSession = getSession as jest.Mock;
+const mockCreate = prisma.mealEntry.create as jest.Mock;
+const mockFindMany = prisma.mealEntry.findMany as jest.Mock;
+const mockDeleteMany = prisma.mealEntry.deleteMany as jest.Mock;
+
+function makeRequest(body: object, method = "POST", url = "http://localhost/api/sync/meals"): NextRequest {
+  const isBodyless = method === "GET" || method === "HEAD";
+  return new NextRequest(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    ...(isBodyless ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+const validFood = {
+  name: "Chicken Breast",
+  servingSize: 150,
+  servingUnit: "g",
+  servings: 1,
+  calories: 247,
+  protein: 46,
+  carbs: 0,
+  fat: 5,
+  fiber: 0,
+};
+
+const validMeal = {
+  type: "lunch",
+  name: "Lunch",
+  time: "13:00",
+  foods: [validFood],
+  aiAnalyzed: false,
+  verified: true,
+};
+
+const savedMeal = {
+  id: "meal-1",
+  userId: "user-1",
+  date: "2024-06-15",
+  ...validMeal,
+  foods: [{ id: "food-1", mealId: "meal-1", ...validFood }],
+};
+
+// ─── POST tests ──────────────────────────────────────────────────────────────
+
+describe("POST /api/sync/meals", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetSession.mockResolvedValue({ userId: "user-1" });
+    mockCreate.mockResolvedValue(savedMeal);
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const req = makeRequest({ meal: validMeal, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 for missing meal", async () => {
+    const req = makeRequest({ date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for missing date", async () => {
+    const req = makeRequest({ meal: validMeal });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for invalid date format", async () => {
+    const req = makeRequest({ meal: validMeal, date: "15/06/2024" });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for invalid meal type", async () => {
+    const req = makeRequest({ meal: { ...validMeal, type: "brunch" }, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for invalid time format", async () => {
+    const req = makeRequest({ meal: { ...validMeal, time: "1:30pm" }, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when foods array is empty", async () => {
+    const req = makeRequest({ meal: { ...validMeal, foods: [] }, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 200 with created meal on success", async () => {
+    const req = makeRequest({ meal: validMeal, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.meal).toBeDefined();
+    expect(data.meal.id).toBe("meal-1");
+  });
+
+  it("accepts all valid meal types", async () => {
+    for (const type of ["breakfast", "lunch", "dinner", "snack"]) {
+      mockCreate.mockResolvedValue({ ...savedMeal, type });
+      const req = makeRequest({ meal: { ...validMeal, type }, date: "2024-06-15" });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it("accepts nested food format (food: { name, ... })", async () => {
+    const nestedFoodMeal = {
+      ...validMeal,
+      foods: [{
+        food: { name: "Rice", servingSize: 150, servingUnit: "g" },
+        servings: 1,
+        calories: 195,
+        protein: 4,
+        carbs: 43,
+        fat: 1,
+        fiber: 0.5,
+      }],
+    };
+    const req = makeRequest({ meal: nestedFoodMeal, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 500 on database error", async () => {
+    mockCreate.mockRejectedValue(new Error("DB error"));
+    const req = makeRequest({ meal: validMeal, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+  });
+});
+
+// ─── GET tests ───────────────────────────────────────────────────────────────
+
+describe("GET /api/sync/meals", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetSession.mockResolvedValue({ userId: "user-1" });
+    mockFindMany.mockResolvedValue([savedMeal]);
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const req = makeRequest({}, "GET", "http://localhost/api/sync/meals");
+    const res = await GET(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns all meals for authenticated user", async () => {
+    const req = makeRequest({}, "GET", "http://localhost/api/sync/meals");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(Array.isArray(data.meals)).toBe(true);
+    expect(data.meals.length).toBe(1);
+  });
+
+  it("filters by date when date param is provided", async () => {
+    mockFindMany.mockResolvedValue([]);
+    const req = makeRequest({}, "GET", "http://localhost/api/sync/meals?date=2024-06-15");
+    await GET(req);
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ date: "2024-06-15" }),
+      })
+    );
+  });
+
+  it("returns 500 on database error", async () => {
+    mockFindMany.mockRejectedValue(new Error("DB error"));
+    const req = makeRequest({}, "GET", "http://localhost/api/sync/meals");
+    const res = await GET(req);
+    expect(res.status).toBe(500);
+  });
+});
+
+// ─── DELETE tests ────────────────────────────────────────────────────────────
+
+describe("DELETE /api/sync/meals", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetSession.mockResolvedValue({ userId: "user-1" });
+    mockDeleteMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const req = makeRequest({ mealId: "meal-1" }, "DELETE");
+    const res = await DELETE(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when mealId is missing", async () => {
+    const req = makeRequest({}, "DELETE");
+    const res = await DELETE(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("deletes meal and returns success", async () => {
+    const req = makeRequest({ mealId: "meal-1" }, "DELETE");
+    const res = await DELETE(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  it("scopes delete to authenticated user (prevents deleting other users' meals)", async () => {
+    const req = makeRequest({ mealId: "meal-1" }, "DELETE");
+    await DELETE(req);
+    expect(mockDeleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "user-1" }),
+      })
+    );
+  });
+
+  it("returns 500 on database error", async () => {
+    mockDeleteMany.mockRejectedValue(new Error("DB error"));
+    const req = makeRequest({ mealId: "meal-1" }, "DELETE");
+    const res = await DELETE(req);
+    expect(res.status).toBe(500);
+  });
+});

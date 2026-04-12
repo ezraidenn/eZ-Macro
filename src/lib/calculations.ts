@@ -69,7 +69,7 @@ export function calculateDeficit(
       return -surpluses[trainingLevel];
     }
     case "recomp":
-      return 100;
+      return -100; // slight surplus to support simultaneous fat loss + muscle gain
     case "maintain":
     default:
       return 0;
@@ -167,7 +167,9 @@ export function calculateFullTDEE(
   const fiber = calculateFiber(gender);
   const water = calculateWater(gender, weight);
 
-  const weeklyChange = (deficit * 7) / 7700;
+  // Negate deficit: positive deficit → weight loss (negative change)
+  //                 negative deficit (surplus) → weight gain (positive change)
+  const weeklyChange = -(deficit * 7) / 7700;
 
   return {
     bmr: Math.round(bmr),
@@ -183,9 +185,15 @@ export function calculateFullTDEE(
 /**
  * Adaptive TDEE calculation based on actual intake and weight change
  *
- * Formula: TDEE_Real = Avg_Calories + ((Weight_Change_kg × 7700) / Days)
+ * Formula: TDEE_Real = Avg_Calories - ((Weight_Change_kg × 7700) / Days)
  *
- * This eliminates errors from predictive equations and activity multipliers
+ * Logic:
+ *   - Weight loss (negative change): TDEE > calories (you burned more than eaten)
+ *   - Weight gain (positive change): TDEE < calories (you stored energy, burned less)
+ *
+ * Example: ate 2000 kcal, lost 0.5kg/week → TDEE = 2000 - (-0.5×7700/7) = 2000+550 = 2550
+ *
+ * This eliminates errors from predictive equations and activity multipliers.
  */
 export function calculateAdaptiveTDEE(
   avgCalories: number,
@@ -193,7 +201,7 @@ export function calculateAdaptiveTDEE(
   days: number
 ): number {
   if (days < 7) return 0;
-  return Math.round(avgCalories + (weightChangeKg * 7700) / days);
+  return Math.round(avgCalories - (weightChangeKg * 7700) / days);
 }
 
 /**

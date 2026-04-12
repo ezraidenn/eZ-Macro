@@ -33,15 +33,25 @@ export default function WeightPage() {
   const todayEntry = weights.find((w) => w.date === today);
   const latestWeight = weights.length > 0 ? weights[weights.length - 1].weight : null;
 
-  const weeklyChange =
-    weights.length >= 7
-      ? weights[weights.length - 1].weight - weights[Math.max(0, weights.length - 7)].weight
-      : null;
+  const weeklyChange = (() => {
+    if (weights.length < 2) return null;
+    const latest = weights[weights.length - 1];
+    const cutoff = new Date(latest.date + "T12:00:00");
+    cutoff.setDate(cutoff.getDate() - 7);
+    const cutoffStr = formatDateKey(cutoff);
+    const older = weights.find((w) => w.date >= cutoffStr);
+    return older ? latest.weight - older.weight : null;
+  })();
 
-  const monthlyChange =
-    weights.length >= 30
-      ? weights[weights.length - 1].weight - weights[Math.max(0, weights.length - 30)].weight
-      : null;
+  const monthlyChange = (() => {
+    if (weights.length < 2) return null;
+    const latest = weights[weights.length - 1];
+    const cutoff = new Date(latest.date + "T12:00:00");
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = formatDateKey(cutoff);
+    const older = weights.find((w) => w.date >= cutoffStr);
+    return older ? latest.weight - older.weight : null;
+  })();
 
   const chartData = weights.slice(-30).map((w) => ({
     date: w.date.slice(5),

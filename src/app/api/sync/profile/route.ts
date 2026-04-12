@@ -11,7 +11,7 @@ const profileSchema = z.object({
   weight: z.number().min(20).max(500),
   activityLevel: z.enum(["sedentary", "light", "moderate", "active", "very_active"]),
   trainingLevel: z.enum(["beginner", "intermediate", "advanced"]),
-  goalType: z.enum(["cut", "maintenance", "bulk"]),
+  goalType: z.enum(["cut", "bulk", "maintain", "recomp"]),
   locale: z.enum(["es", "en"]).optional(),
   theme: z.enum(["dark", "light"]).optional(),
 });
@@ -105,9 +105,12 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const profile = await prisma.profile.findUnique({
-    where: { userId: session.userId },
-  });
-
-  return NextResponse.json({ profile });
+  try {
+    const profile = await prisma.profile.findUnique({
+      where: { userId: session.userId },
+    });
+    return NextResponse.json({ profile });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
