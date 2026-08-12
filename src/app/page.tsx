@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore, useStore, switchUserStore } from "@/lib/store";
 import { syncUserDataFromServer } from "@/lib/sync";
@@ -10,47 +10,46 @@ export default function Home() {
   const userId = useAuthStore((s) => s.userId);
   const setUserId = useAuthStore((s) => s.setUserId);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
-  const profile = useStore((s) => s.profile);
-  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     // Wait for auth store to hydrate from localStorage before making decisions
     if (!hasHydrated) return;
 
+    function routeAfterSync(status: "ok" | "unauthorized" | "error") {
+      if (status === "unauthorized") {
+        // Cookie expirada: a login, nunca a re-onboarding (el usuario ya tiene
+        // cuenta; re-onboardear machacaría su perfil).
+        setUserId(null);
+        switchUserStore(null);
+        router.replace("/auth");
+        return;
+      }
+      if (useStore.getState().profile) {
+        router.replace("/dashboard");
+      } else {
+        router.replace("/onboarding");
+      }
+    }
+
     async function checkAuth() {
       // If user is already in auth store (from persistence), load their data and redirect
       if (userId) {
         switchUserStore(userId);
-        // Always sync from server to restore meals, weights, and profile
-        // even if profile is cached in localStorage
-        await syncUserDataFromServer();
-        setChecking(false);
-        if (useStore.getState().profile) {
-          router.replace("/dashboard");
-        } else {
-          router.replace("/onboarding");
-        }
+        const result = await syncUserDataFromServer();
+        routeAfterSync(result.status);
         return;
       }
 
       // No userId in store - check with server cookie
       try {
-        const res = await fetch("/api/auth/me", {
-          credentials: 'include',
-        });
+        const res = await fetch("/api/auth/me", { credentials: "include" });
         const data = await res.json();
-        
+
         if (data.user) {
           setUserId(data.user.id);
           switchUserStore(data.user.id);
-          
-          // Sync all user data from server
-          await syncUserDataFromServer();
-          if (useStore.getState().profile) {
-            router.replace("/dashboard");
-          } else {
-            router.replace("/onboarding");
-          }
+          const result = await syncUserDataFromServer();
+          routeAfterSync(result.status);
         } else {
           setUserId(null);
           router.replace("/auth");
@@ -59,8 +58,6 @@ export default function Home() {
         console.error("Auth check failed:", error);
         setUserId(null);
         router.replace("/auth");
-      } finally {
-        setChecking(false);
       }
     }
 

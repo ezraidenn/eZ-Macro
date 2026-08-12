@@ -14,8 +14,8 @@ import {
   type SavedShake,
   type SavedMealTemplate,
 } from "./types";
-import { calculateFullTDEE } from "./calculations";
-import { formatDateKey, movingAverage } from "./utils";
+import { calculateFullTDEE, calculateWeightMovingAvg } from "./calculations";
+import { formatDateKey } from "./utils";
 import type { Locale } from "./i18n";
 
 // ─── Hydration guard ─────────────────────────────────────────────────
@@ -214,13 +214,12 @@ export const useStore = create<AppState>()(
           const updated = [...existing, { date, weight }].sort(
             (a, b) => a.date.localeCompare(b.date)
           );
-          // Calculate 7-day moving averages
-          const withAvg = updated.map((entry, i) => {
-            const start = Math.max(0, i - 6);
-            const slice = updated.slice(start, i + 1);
-            const avg = slice.reduce((s, w) => s + w.weight, 0) / slice.length;
-            return { ...entry, movingAvg7d: Math.round(avg * 100) / 100 };
-          });
+          // Promedio móvil de 7 días naturales, recalculado siempre en cliente
+          const withAvg = calculateWeightMovingAvg(updated).map((w) => ({
+            date: w.date,
+            weight: w.weight,
+            movingAvg7d: w.movingAvg,
+          }));
           return { weights: withAvg };
         });
       },
@@ -279,29 +278,24 @@ export const useStore = create<AppState>()(
 // ─── Helper: Switch user data store ─────────────────────────────────
 // When userId changes, we need to reload the store from the correct localStorage key
 export function switchUserStore(userId: string | null) {
-  console.log("[switchUserStore] Called with userId:", userId);
   // Mark as not hydrated while switching — prevents subscribe from saving
   // empty/intermediate state to the per-user key.
   _storeHydrated = false;
 
   if (!userId) {
     // Logout: clear store in memory, don't touch any per-user key
-    console.log("[switchUserStore] No userId, resetting store");
     useStore.getState().resetUserData();
     return;
   }
 
   const storeName = `ezmacro-data-${userId}`;
-  console.log("[switchUserStore] Looking for localStorage key:", storeName);
 
   // Try to load existing data for this user from localStorage
   try {
     const raw = localStorage.getItem(storeName);
-    console.log("[switchUserStore] localStorage raw data:", raw ? "found" : "not found");
     if (raw) {
       const parsed = JSON.parse(raw);
       const state = parsed?.state;
-      console.log("[switchUserStore] Parsed state has dayLogs:", Object.keys(state?.dayLogs || {}).length, "dates");
       if (state) {
         useStore.setState({
           locale: state.locale || "es",
@@ -320,8 +314,6 @@ export function switchUserStore(userId: string | null) {
           useStore.getState().recalculateTDEE();
         }
         _storeHydrated = true;
-        const dayLogCount = Object.keys(state.dayLogs || {}).length;
-        console.log("[switchUserStore] Store loaded from localStorage, dayLogs:", dayLogCount);
         return;
       }
     }
@@ -329,34 +321,38 @@ export function switchUserStore(userId: string | null) {
     console.error("[switchUserStore] Failed to load user store:", e);
   }
 
-  // No existing data for this user — start from defaults.
-  // Do NOT call resetUserData here: it would trigger the subscribe,
-  // which would save empty state. Instead, just leave defaults and
-  // wait for syncUserDataFromServer to populate from DB.
-  console.log("[switchUserStore] No data found, resetting to defaults");
+  // No existing data for this user — start from defaults and wait for
+  // syncUserDataFromServer to populate from DB (it marks hydration).
   useStore.getState().resetUserData();
-  // Don't mark as hydrated yet — wait for sync to finish
 }
 
 // ─── Helper: Save current store to user-specific key ────────────────
+
+// Las fotos (data-URI base64, hasta ~2MB c/u) NO se persisten en localStorage:
+// unas cuantas reventarían la cuota de ~5MB y a partir de ahí TODO el guardado
+// local fallaría en silencio. Viven en el servidor; la UI no las usa post-log.
+function stripPhotos(dayLogs: Record<string, DayLog>): Record<string, DayLog> {
+  return Object.fromEntries(
+    Object.entries(dayLogs).map(([date, log]) => [
+      date,
+      {
+        ...log,
+        meals: log.meals.map(({ photoUrl: _photo, ...meal }) => meal),
+      },
+    ])
+  );
+}
+
 export function saveUserStore() {
   // Guard: don't save until the store has been properly loaded
-  if (!_storeHydrated) {
-    console.log("[saveUserStore] Skipping save - store not hydrated yet");
-    return;
-  }
+  if (!_storeHydrated) return;
 
   const userId = useAuthStore.getState().userId;
-  if (!userId) {
-    console.log("[saveUserStore] Skipping save - no userId");
-    return;
-  }
-  
+  if (!userId) return;
+
   const storeName = `ezmacro-data-${userId}`;
   const state = useStore.getState();
-  const mealCount = Object.values(state.dayLogs || {}).reduce((acc, log) => acc + (log.meals?.length || 0), 0);
-  console.log("[saveUserStore] Saving to", storeName, "- meals:", mealCount);
-  
+
   const dataToSave = {
     state: {
       locale: state.locale,
@@ -364,7 +360,7 @@ export function saveUserStore() {
       profile: state.profile,
       tdeeResult: state.tdeeResult,
       targets: state.targets,
-      dayLogs: state.dayLogs,
+      dayLogs: stripPhotos(state.dayLogs),
       weights: state.weights,
       savedShakes: state.savedShakes,
       savedMealTemplates: state.savedMealTemplates,
@@ -372,11 +368,12 @@ export function saveUserStore() {
     },
     version: 1,
   };
-  
+
   try {
     localStorage.setItem(storeName, JSON.stringify(dataToSave));
-    console.log("[saveUserStore] Saved successfully");
   } catch (e) {
+    // QuotaExceededError u otros: no silenciar del todo — es pérdida de
+    // persistencia local (los datos siguen en el servidor).
     console.error("[saveUserStore] Failed to save user store:", e);
   }
 }

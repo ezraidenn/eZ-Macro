@@ -81,18 +81,19 @@ function normalizeProduct(product: any): NormalizedFood | null {
   const fiber   = Math.max(0, getVal("fiber"));
 
   // Always derive calories from macros — never trust OFF calorie field blindly.
+  // Fallback to OFF's kcal only when the product has no macro data at all.
+  // If both are zero the product has no nutritional data — skip it.
   const calculatedKcal = protein * 4 + carbs * 4 + fat * 9;
   const offKcal = getVal("energy-kcal");
 
-  // If OFF calories are within 15% of calculated, use calculated (authoritative).
-  // If both are zero the product has no nutritional data — skip it.
   if (calculatedKcal < 1 && offKcal < 1) return null;
 
   const calories = Math.round(calculatedKcal > 0 ? calculatedKcal : offKcal);
 
-  // Clean up serving unit label
+  // Unidad de porción: primera palabra alfabética del serving_size
+  // ("30 g" → "g", "2 tbsp (30g)" → "tbsp")
   const rawServingSize = (product.serving_size || "").toString().trim();
-  const servingUnit = rawServingSize.replace(/[\d.,\s]/g, "").trim() || "g";
+  const servingUnit = rawServingSize.match(/[a-zA-Z]+/)?.[0] || "g";
 
   return {
     id: product.code || `off-${Math.random().toString(36).slice(2)}`,

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -14,8 +13,9 @@ import { t, getGreetingLocalized } from "@/lib/i18n";
 import {
   formatDate,
   formatDateKey,
-  percentage,
 } from "@/lib/utils";
+import { getWeightChangeOverDays } from "@/lib/calculations";
+import { deleteMealOnServer } from "@/lib/meal-sync";
 import {
   Plus,
   Droplets,
@@ -64,31 +64,19 @@ export default function DashboardPage() {
   const isToday = currentDate === today;
 
   const latestWeight = weights.length > 0 ? weights[weights.length - 1] : null;
-  const weeklyChange = (() => {
-    if (weights.length < 2) return null;
-    const latest = weights[weights.length - 1];
-    const sevenDaysAgo = new Date(latest.date + "T12:00:00");
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const sevenDaysAgoStr = formatDateKey(sevenDaysAgo);
-    const older = weights.find((w) => w.date >= sevenDaysAgoStr);
-    return older ? latest.weight - older.weight : null;
-  })();
+  const weeklyChange = getWeightChangeOverDays(weights, 7);
 
-  function handleDeleteMeal(mealId: string) {
+  async function handleDeleteMeal(mealId: string) {
     const mealToDelete = log.meals.find((m) => m.id === mealId);
     removeMeal(currentDate, mealId); // optimistic
 
-    fetch("/api/sync/meals", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mealId }),
-    }).catch(() => {
-      // Rollback: restore the meal if the API call fails
-      if (mealToDelete) {
-        useStore.getState().addMeal(currentDate, mealToDelete);
-        toast.error(t(locale, "dashboard.deleteFailed"));
-      }
-    });
+    // Verificar la respuesta HTTP, no solo errores de red: un 401/500 sin
+    // rollback dejaba la comida viva en el servidor y "resucitaba" al sync.
+    const ok = await deleteMealOnServer(mealId);
+    if (!ok && mealToDelete) {
+      useStore.getState().addMeal(currentDate, mealToDelete);
+      toast.error(t(locale, "dashboard.deleteFailed"));
+    }
   }
 
   function shiftDate(days: number) {

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { hashSync } from "bcryptjs";
+import { hash } from "bcryptjs";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+
+const MAX_ATTEMPTS = 10;
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutos
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,8 +22,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const ip = getClientIp(req);
+    if (!checkRateLimit(`reset:${ip}`, MAX_ATTEMPTS, WINDOW_MS)) {
+      return NextResponse.json(
+        { error: "Demasiados intentos. Intenta más tarde." },
+        { status: 429 }
+      );
+    }
+
+    // La BD guarda el hash del token; hasheamos el recibido para buscarlo
+    const hashedToken = createHash("sha256").update(token).digest("hex");
+
     const user = await prisma.user.findUnique({
-      where: { passwordResetToken: token },
+      where: { passwordResetToken: hashedToken },
     });
 
     if (!user || !user.passwordResetExpiry) {
@@ -29,7 +45,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El enlace ha expirado. Solicita uno nuevo." }, { status: 400 });
     }
 
-    const hashed = hashSync(newPassword, 12);
+    const hashed = await hash(newPassword, 12);
 
     await prisma.user.update({
       where: { id: user.id },

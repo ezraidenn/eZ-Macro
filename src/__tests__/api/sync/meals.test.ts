@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { POST, GET, DELETE } from "@/app/api/sync/meals/route";
+import { POST, GET, PUT, DELETE } from "@/app/api/sync/meals/route";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -12,8 +12,15 @@ jest.mock("@/lib/prisma", () => ({
     mealEntry: {
       create: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    foodEntry: {
       deleteMany: jest.fn(),
     },
+    $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   },
 }));
 
@@ -23,7 +30,10 @@ import { prisma } from "@/lib/prisma";
 const mockGetSession = getSession as jest.Mock;
 const mockCreate = prisma.mealEntry.create as jest.Mock;
 const mockFindMany = prisma.mealEntry.findMany as jest.Mock;
-const mockDeleteMany = prisma.mealEntry.deleteMany as jest.Mock;
+const mockFindUnique = prisma.mealEntry.findUnique as jest.Mock;
+const mockFindFirst = prisma.mealEntry.findFirst as jest.Mock;
+const mockUpdate = prisma.mealEntry.update as jest.Mock;
+const mockUpdateMany = prisma.mealEntry.updateMany as jest.Mock;
 
 function makeRequest(body: object, method = "POST", url = "http://localhost/api/sync/meals"): NextRequest {
   const isBodyless = method === "GET" || method === "HEAD";
@@ -57,9 +67,13 @@ const validMeal = {
 
 const savedMeal = {
   id: "meal-1",
-  userId: "user-1",
   date: "2024-06-15",
-  ...validMeal,
+  type: "lunch",
+  name: "Lunch",
+  time: "13:00",
+  aiAnalyzed: false,
+  verified: true,
+  deletedAt: null,
   foods: [{ id: "food-1", mealId: "meal-1", ...validFood }],
 };
 
@@ -70,6 +84,7 @@ describe("POST /api/sync/meals", () => {
     jest.clearAllMocks();
     mockGetSession.mockResolvedValue({ userId: "user-1" });
     mockCreate.mockResolvedValue(savedMeal);
+    mockFindUnique.mockResolvedValue(null);
   });
 
   it("returns 401 when not authenticated", async () => {
@@ -152,10 +167,102 @@ describe("POST /api/sync/meals", () => {
     expect(res.status).toBe(200);
   });
 
+  it("creates with the client-provided id (idempotency key)", async () => {
+    const clientId = "11111111-2222-3333-4444-555555555555";
+    const req = makeRequest({ meal: { ...validMeal, id: clientId }, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ id: clientId }),
+      })
+    );
+  });
+
+  it("is idempotent: returns the existing meal instead of duplicating when id already exists for this user", async () => {
+    const clientId = "11111111-2222-3333-4444-555555555555";
+    mockFindUnique.mockResolvedValue({ ...savedMeal, id: clientId, userId: "user-1" });
+    const req = makeRequest({ meal: { ...validMeal, id: clientId }, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.existed).toBe(true);
+    expect(data.meal.id).toBe(clientId);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates with a fresh server id when the client id belongs to another user", async () => {
+    const clientId = "11111111-2222-3333-4444-555555555555";
+    mockFindUnique.mockResolvedValue({ ...savedMeal, id: clientId, userId: "OTHER-user" });
+    const req = makeRequest({ meal: { ...validMeal, id: clientId }, date: "2024-06-15" });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const createArgs = mockCreate.mock.calls[0][0];
+    expect(createArgs.data.id).toBeUndefined();
+  });
+
   it("returns 500 on database error", async () => {
     mockCreate.mockRejectedValue(new Error("DB error"));
     const req = makeRequest({ meal: validMeal, date: "2024-06-15" });
     const res = await POST(req);
+    expect(res.status).toBe(500);
+  });
+});
+
+// ─── PUT tests ───────────────────────────────────────────────────────────────
+
+describe("PUT /api/sync/meals", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetSession.mockResolvedValue({ userId: "user-1" });
+    mockFindFirst.mockResolvedValue({ id: "meal-1" });
+    (prisma.foodEntry.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+    mockUpdate.mockResolvedValue({ ...savedMeal, name: "Comida editada" });
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const req = makeRequest({ mealId: "meal-1", meal: { foods: [validFood] } }, "PUT");
+    const res = await PUT(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when foods are missing", async () => {
+    const req = makeRequest({ mealId: "meal-1", meal: {} }, "PUT");
+    const res = await PUT(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when the meal does not belong to the user", async () => {
+    mockFindFirst.mockResolvedValue(null);
+    const req = makeRequest({ mealId: "meal-1", meal: { foods: [validFood] } }, "PUT");
+    const res = await PUT(req);
+    expect(res.status).toBe(404);
+    expect(mockFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: "meal-1", userId: "user-1", deletedAt: null }),
+      })
+    );
+  });
+
+  it("replaces foods atomically and returns the updated meal", async () => {
+    const req = makeRequest(
+      { mealId: "meal-1", meal: { name: "Comida editada", foods: [validFood] } },
+      "PUT"
+    );
+    const res = await PUT(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.meal.name).toBe("Comida editada");
+    expect(prisma.foodEntry.deleteMany).toHaveBeenCalledWith({ where: { mealId: "meal-1" } });
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it("returns 500 on database error", async () => {
+    (prisma.$transaction as jest.Mock).mockRejectedValueOnce(new Error("DB error"));
+    const req = makeRequest({ mealId: "meal-1", meal: { foods: [validFood] } }, "PUT");
+    const res = await PUT(req);
     expect(res.status).toBe(500);
   });
 });
@@ -196,6 +303,31 @@ describe("GET /api/sync/meals", () => {
     );
   });
 
+  it("excludes soft-deleted meals by default", async () => {
+    const req = makeRequest({}, "GET", "http://localhost/api/sync/meals");
+    await GET(req);
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ deletedAt: null }),
+      })
+    );
+  });
+
+  it("includes tombstones when includeDeleted=1 (needed by the sync)", async () => {
+    const req = makeRequest({}, "GET", "http://localhost/api/sync/meals?includeDeleted=1");
+    await GET(req);
+    const args = mockFindMany.mock.calls[0][0];
+    expect(args.where.deletedAt).toBeUndefined();
+  });
+
+  it("never selects photoUrl (payload/localStorage bloat)", async () => {
+    const req = makeRequest({}, "GET", "http://localhost/api/sync/meals");
+    await GET(req);
+    const args = mockFindMany.mock.calls[0][0];
+    expect(args.select.photoUrl).toBeUndefined();
+    expect(args.select.id).toBe(true);
+  });
+
   it("returns 500 on database error", async () => {
     mockFindMany.mockRejectedValue(new Error("DB error"));
     const req = makeRequest({}, "GET", "http://localhost/api/sync/meals");
@@ -210,7 +342,7 @@ describe("DELETE /api/sync/meals", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetSession.mockResolvedValue({ userId: "user-1" });
-    mockDeleteMany.mockResolvedValue({ count: 1 });
+    mockUpdateMany.mockResolvedValue({ count: 1 });
   });
 
   it("returns 401 when not authenticated", async () => {
@@ -226,18 +358,23 @@ describe("DELETE /api/sync/meals", () => {
     expect(res.status).toBe(400);
   });
 
-  it("deletes meal and returns success", async () => {
+  it("soft-deletes (sets deletedAt) instead of removing the row", async () => {
     const req = makeRequest({ mealId: "meal-1" }, "DELETE");
     const res = await DELETE(req);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.success).toBe(true);
+    expect(mockUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ deletedAt: expect.any(Date) }),
+      })
+    );
   });
 
   it("scopes delete to authenticated user (prevents deleting other users' meals)", async () => {
     const req = makeRequest({ mealId: "meal-1" }, "DELETE");
     await DELETE(req);
-    expect(mockDeleteMany).toHaveBeenCalledWith(
+    expect(mockUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ userId: "user-1" }),
       })
@@ -245,7 +382,7 @@ describe("DELETE /api/sync/meals", () => {
   });
 
   it("returns 500 on database error", async () => {
-    mockDeleteMany.mockRejectedValue(new Error("DB error"));
+    mockUpdateMany.mockRejectedValue(new Error("DB error"));
     const req = makeRequest({ mealId: "meal-1" }, "DELETE");
     const res = await DELETE(req);
     expect(res.status).toBe(500);

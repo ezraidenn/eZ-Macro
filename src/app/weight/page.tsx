@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { formatDateKey } from "@/lib/utils";
+import { getWeightChangeOverDays } from "@/lib/calculations";
 import { Scale, TrendingDown, TrendingUp, Minus, Plus, Check } from "lucide-react";
 import {
   LineChart,
@@ -26,32 +27,25 @@ export default function WeightPage() {
   const setProfile = useStore((s) => s.setProfile);
   const locale = useStore((s) => s.locale);
   const [inputWeight, setInputWeight] = useState(
-    profile?.weight?.toString() ?? "75"
+    profile?.weight ? profile.weight.toString() : ""
   );
+  // El store hidrata async: en un arranque en frío, profile es null en el
+  // primer render y el input mostraba un "75" inventado que el usuario podía
+  // guardar como peso real. Sincronizar cuando llegue el perfil, salvo que el
+  // usuario ya haya escrito algo.
+  const inputDirty = useRef(false);
+  useEffect(() => {
+    if (!inputDirty.current && profile?.weight) {
+      setInputWeight(profile.weight.toString());
+    }
+  }, [profile?.weight]);
 
   const today = formatDateKey(new Date());
   const todayEntry = weights.find((w) => w.date === today);
   const latestWeight = weights.length > 0 ? weights[weights.length - 1].weight : null;
 
-  const weeklyChange = (() => {
-    if (weights.length < 2) return null;
-    const latest = weights[weights.length - 1];
-    const cutoff = new Date(latest.date + "T12:00:00");
-    cutoff.setDate(cutoff.getDate() - 7);
-    const cutoffStr = formatDateKey(cutoff);
-    const older = weights.find((w) => w.date >= cutoffStr);
-    return older ? latest.weight - older.weight : null;
-  })();
-
-  const monthlyChange = (() => {
-    if (weights.length < 2) return null;
-    const latest = weights[weights.length - 1];
-    const cutoff = new Date(latest.date + "T12:00:00");
-    cutoff.setDate(cutoff.getDate() - 30);
-    const cutoffStr = formatDateKey(cutoff);
-    const older = weights.find((w) => w.date >= cutoffStr);
-    return older ? latest.weight - older.weight : null;
-  })();
+  const weeklyChange = getWeightChangeOverDays(weights, 7);
+  const monthlyChange = getWeightChangeOverDays(weights, 30);
 
   const chartData = weights.slice(-30).map((w) => ({
     date: w.date.slice(5),
@@ -61,7 +55,8 @@ export default function WeightPage() {
 
   async function handleSave() {
     const val = parseFloat(inputWeight);
-    if (isNaN(val) || val < 20 || val > 400) {
+    // Rango alineado con la validación del servidor (20–500)
+    if (isNaN(val) || val < 20 || val > 500) {
       toast.error(t(locale, "weight.invalidWeight"));
       return;
     }
@@ -80,7 +75,25 @@ export default function WeightPage() {
 
       // Actualizar store solo después de confirmar guardado en BD
       addWeight(today, val);
-      if (profile) setProfile({ ...profile, weight: val });
+
+      if (profile) {
+        const updatedProfile = { ...profile, weight: val };
+        setProfile(updatedProfile);
+        // El peso del perfil también va al servidor: si se queda solo en
+        // local, el próximo login trae el peso viejo y el TDEE/metas revierten.
+        try {
+          const pRes = await fetch("/api/sync/profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updatedProfile),
+          });
+          if (!pRes.ok) {
+            console.error("[weight] No se pudo actualizar el peso del perfil");
+          }
+        } catch {
+          // el peso del día quedó guardado; el perfil se reconciliará después
+        }
+      }
 
       toast.success(t(locale, "weight.logged"));
     } catch {
@@ -89,9 +102,12 @@ export default function WeightPage() {
   }
 
   function adjustWeight(delta: number) {
+    inputDirty.current = true;
     const val = parseFloat(inputWeight);
     if (!isNaN(val)) {
       setInputWeight((val + delta).toFixed(1));
+    } else if (profile?.weight) {
+      setInputWeight(profile.weight.toString());
     }
   }
 
@@ -129,8 +145,12 @@ export default function WeightPage() {
               <input
                 type="number"
                 value={inputWeight}
-                onChange={(e) => setInputWeight(e.target.value)}
+                onChange={(e) => {
+                  inputDirty.current = true;
+                  setInputWeight(e.target.value);
+                }}
                 step="0.1"
+                placeholder="0.0"
                 className="w-28 bg-transparent text-center text-3xl font-bold tabular-nums outline-none"
               />
               <span className="absolute -right-6 bottom-1 text-xs text-muted-foreground">

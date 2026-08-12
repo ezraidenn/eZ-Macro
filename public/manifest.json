@@ -1,7 +1,7 @@
 {
-  "name": "eZMacro - Precision Nutrition",
+  "name": "eZMacro — Nutrición de precisión",
   "short_name": "eZMacro",
-  "description": "AI-powered macro tracking with 99%+ scientific accuracy",
+  "description": "Seguimiento de macros con IA y precisión científica",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0a0a0a",
@@ -13,20 +13,17 @@
     {
       "src": "/icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/svg+xml"
     },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ],
   "categories": ["health", "fitness", "food"],

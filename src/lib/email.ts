@@ -7,8 +7,17 @@ function getResend() {
 const FROM = process.env.EMAIL_FROM ?? "eZMacro <noreply@ezmacro.app>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function sendWelcomeEmail(to: string, name?: string) {
-  const displayName = name ?? to.split("@")[0];
+  const displayName = escapeHtml(name ?? to.split("@")[0]);
 
   await getResend().emails.send({
     from: FROM,

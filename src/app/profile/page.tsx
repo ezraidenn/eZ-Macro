@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useStore } from "@/lib/store";
@@ -53,12 +53,32 @@ export default function ProfilePage() {
   const [goalType, setGoalType] = useState<GoalType>(
     profile?.goalType ?? "cut"
   );
+  const [saving, setSaving] = useState(false);
+
+  // El store hidrata async: tras un refresh directo en /profile, el primer
+  // render tiene profile=null y el formulario quedaba con defaults inventados
+  // (75kg/175cm/25a) que el usuario podía guardar encima de su perfil real.
+  // Re-sincronizar el formulario cuando el perfil llegue o cambie.
+  useEffect(() => {
+    if (!profile) return;
+    setName(profile.name);
+    setGender(profile.gender);
+    setAge(profile.age);
+    setHeight(profile.height);
+    setWeight(profile.weight);
+    setActivityLevel(profile.activityLevel);
+    setTrainingLevel(profile.trainingLevel);
+    setGoalType(profile.goalType);
+  }, [profile]);
 
   async function handleSave() {
     if (!name.trim()) {
       toast.error(t(locale, "profile.nameRequired"));
       return;
     }
+    if (saving) return;
+    setSaving(true);
+
     const profileData = {
       name,
       gender,
@@ -69,8 +89,9 @@ export default function ProfilePage() {
       trainingLevel,
       goalType,
     };
-    setProfile(profileData);
 
+    // Server-first (igual que onboarding): el store solo se actualiza cuando
+    // la BD confirmó — si no, el próximo sync revertía el cambio en silencio.
     try {
       const res = await fetch("/api/sync/profile", {
         method: "POST",
@@ -82,12 +103,13 @@ export default function ProfilePage() {
         toast.error(data.error ?? t(locale, "auth.genericError"));
         return;
       }
+      setProfile(profileData);
+      toast.success(t(locale, "profile.updated"));
     } catch {
       toast.error(t(locale, "auth.genericError"));
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    toast.success(t(locale, "profile.updated"));
   }
 
   function handleReset() {
@@ -275,7 +297,8 @@ export default function ProfilePage() {
           </button>
           <button
             onClick={handleSave}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-semibold text-black active:bg-emerald-600 transition-colors"
+            disabled={saving}
+            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-semibold text-black active:bg-emerald-600 transition-colors disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {t(locale, "profile.save")}

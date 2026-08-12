@@ -7,6 +7,7 @@ import {
   type TDEEResult,
   ACTIVITY_MULTIPLIERS,
 } from "./types";
+import { addDaysToDateKey } from "./utils";
 
 /**
  * Mifflin-St Jeor Equation (1990)
@@ -207,17 +208,38 @@ export function calculateAdaptiveTDEE(
 /**
  * Calculate 7-day moving average for weight trend
  * Eliminates daily fluctuations (1-3kg from water, glycogen, sodium)
+ *
+ * La ventana es de días NATURALES (fechas), no de número de entradas: con
+ * pesajes esporádicos, promediar "las últimas 7 entradas" mezclaría semanas
+ * distintas. Requiere la lista ordenada por fecha ascendente (YYYY-MM-DD).
  */
 export function calculateWeightMovingAvg(
   weights: { date: string; weight: number }[],
-  window = 7
+  windowDays = 7
 ): { date: string; weight: number; movingAvg: number }[] {
   return weights.map((entry, i) => {
-    const start = Math.max(0, i - window + 1);
-    const slice = weights.slice(start, i + 1);
+    const cutoff = addDaysToDateKey(entry.date, -(windowDays - 1));
+    const slice = weights.filter((w, j) => j <= i && w.date >= cutoff);
     const avg = slice.reduce((sum, w) => sum + w.weight, 0) / slice.length;
     return { ...entry, movingAvg: Math.round(avg * 100) / 100 };
   });
+}
+
+/**
+ * Cambio de peso dentro de una ventana de días naturales.
+ * Devuelve null si no hay una entrada ANTERIOR dentro de la ventana — antes
+ * se devolvía 0.0 engañoso cuando el único punto en la ventana era el último.
+ */
+export function getWeightChangeOverDays(
+  weights: { date: string; weight: number }[],
+  days: number
+): number | null {
+  if (weights.length < 2) return null;
+  const latest = weights[weights.length - 1];
+  const cutoff = addDaysToDateKey(latest.date, -days);
+  const older = weights.find((w) => w.date >= cutoff);
+  if (!older || older.date === latest.date) return null;
+  return latest.weight - older.weight;
 }
 
 /**
@@ -297,6 +319,11 @@ export function estimateBodyFat(
   height: number, // cm
   hip?: number // cm (required for female)
 ): number {
+  // log10 exige argumentos positivos: con cintura ≤ cuello (o alto ≤ 0) la
+  // fórmula devolvería NaN. 0 = "no estimable" para el caller.
+  if (height <= 0) return 0;
+  if (gender === "male" && waist - neck <= 0) return 0;
+  if (gender === "female" && waist + (hip ?? 0) - neck <= 0) return 0;
   if (gender === "male") {
     return (
       495 /

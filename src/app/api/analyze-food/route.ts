@@ -1,32 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSession } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
-// Simple in-memory rate limiter: max 20 analyses per hour per user
-// NOTE: Resets on cold starts in serverless environments (Vercel).
-// For persistent rate limiting, use Redis/Upstash or Vercel KV.
-const rateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT = 20;
-const WINDOW_MS = 60 * 60 * 1000; // 1 hour
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const timestamps = (rateLimitMap.get(userId) ?? []).filter(
-    (t) => now - t < WINDOW_MS
-  );
-  if (timestamps.length >= RATE_LIMIT) return false;
-  timestamps.push(now);
-  rateLimitMap.set(userId, timestamps);
-  // Purge stale entries to prevent unbounded memory growth
-  if (rateLimitMap.size > 1000) {
-    rateLimitMap.forEach((times, key) => {
-      if (times.every((ts) => now - ts >= WINDOW_MS)) {
-        rateLimitMap.delete(key);
-      }
-    });
-  }
-  return true;
-}
+const RATE_LIMIT = 20; // análisis por hora por usuario
+const WINDOW_MS = 60 * 60 * 1000;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -359,7 +337,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!checkRateLimit(session.userId)) {
+  if (!checkRateLimit(`analyze-food:${session.userId}`, RATE_LIMIT, WINDOW_MS)) {
     return NextResponse.json(
       { error: "Límite de análisis alcanzado (20/hora). Intenta más tarde." },
       { status: 429 }
@@ -367,29 +345,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { imageBase64, imageUrl, images, userComment } = await req.json();
-
-    // Validate imageUrl is a proper public HTTPS URL (not internal network)
-    if (imageUrl) {
-      try {
-        const parsed = new URL(imageUrl);
-        if (parsed.protocol !== "https:") throw new Error("Only HTTPS URLs allowed");
-        // Block private/internal IP ranges
-        const hostname = parsed.hostname;
-        if (
-          hostname === "localhost" ||
-          hostname.startsWith("192.168.") ||
-          hostname.startsWith("10.") ||
-          /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname) ||
-          hostname === "127.0.0.1" ||
-          hostname === "0.0.0.0"
-        ) {
-          return NextResponse.json({ error: "Invalid image URL" }, { status: 400 });
-        }
-      } catch {
-        return NextResponse.json({ error: "Invalid image URL" }, { status: 400 });
-      }
-    }
+    const { imageBase64, images, userComment } = await req.json();
 
     // Support multiple images (up to 3) or single image
     const imageContents: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [];
@@ -412,11 +368,6 @@ export async function POST(req: NextRequest) {
           url: `data:image/jpeg;base64,${imageBase64}`,
           detail: "high",
         },
-      });
-    } else if (imageUrl) {
-      imageContents.push({
-        type: "image_url",
-        image_url: { url: imageUrl, detail: "high" },
       });
     }
 

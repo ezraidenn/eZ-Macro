@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { getSession } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const RATE_LIMIT = 30; // recomendaciones por hora por usuario
+const WINDOW_MS = 60 * 60 * 1000;
 
 const SYSTEM_PROMPT = `You are a professional nutritionist AI with deep expertise in sports nutrition and evidence-based dietary science. Based on the user's remaining macros, priority selections, and goal context, recommend 4 specific, practical food options.
 
@@ -62,15 +67,32 @@ Rules:
 - Calories MUST equal (protein×4 + carbs×4 + fat×9) — validate before outputting`;
 
 export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!checkRateLimit(`recommendations:${session.userId}`, RATE_LIMIT, WINDOW_MS)) {
+    return NextResponse.json(
+      { error: "Límite de sugerencias alcanzado (30/hora). Intenta más tarde." },
+      { status: 429 }
+    );
+  }
+
   try {
-    const { remaining, mealsEaten, locale, priorities, targets, profile } = await req.json();
+    const { remaining, mealsEaten, locale, priorities, targets, profile, localHour } = await req.json();
 
     if (!remaining) {
       return NextResponse.json({ error: "Missing remaining macros" }, { status: 400 });
     }
 
-    // Determine suggested meal type based on meals already eaten and time of day
-    const hour = new Date().getHours();
+    // Determine suggested meal type based on meals already eaten and time of day.
+    // The server runs in UTC, so the client sends its local hour; fall back to
+    // server time only if the client didn't provide one.
+    const hour =
+      typeof localHour === "number" && localHour >= 0 && localHour <= 23
+        ? Math.floor(localHour)
+        : new Date().getHours();
     let suggestedMeal = "snack";
 
     const mealTypes = (mealsEaten || []).map((m: any) => m.type);

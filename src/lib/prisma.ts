@@ -12,8 +12,16 @@ function createPrismaClient() {
   }
 
   // Use standard pg driver for both development and production
-  // Works reliably with Neon PostgreSQL in all environments
-  const pool = new Pool({ connectionString });
+  // Works reliably with Neon PostgreSQL in all environments.
+  // max bajo: en serverless cada instancia lambda tiene su propio pool y la
+  // URL ya apunta al pooler de Neon; pools grandes por instancia agotan
+  // conexiones del lado del pooler.
+  const pool = new Pool({
+    connectionString,
+    max: 3,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+  });
   const adapter = new PrismaPg(pool);
   
   return new PrismaClient({

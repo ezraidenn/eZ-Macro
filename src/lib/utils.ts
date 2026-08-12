@@ -41,8 +41,31 @@ export function formatDate(date: Date): string {
   });
 }
 
+/**
+ * Clave de día YYYY-MM-DD en hora LOCAL del dispositivo.
+ * Nunca usar toISOString() aquí: es UTC, y en México (UTC-6) todo lo
+ * registrado después de las ~18:00 caía en el día siguiente (comidas de la
+ * cena sumaban a mañana, "hoy" cambiaba a media tarde).
+ */
 export function formatDateKey(date: Date): string {
-  return date.toISOString().split("T")[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Suma días a una clave YYYY-MM-DD (parsea a mediodía para evitar saltos DST). */
+export function addDaysToDateKey(dateKey: string, days: number): string {
+  const d = new Date(dateKey + "T12:00:00");
+  d.setDate(d.getDate() + days);
+  return formatDateKey(d);
+}
+
+/** Días naturales entre dos claves YYYY-MM-DD (b - a). */
+export function diffInDays(a: string, b: string): number {
+  const da = new Date(a + "T12:00:00").getTime();
+  const db = new Date(b + "T12:00:00").getTime();
+  return Math.round((db - da) / 86_400_000);
 }
 
 export function isSameDay(a: Date, b: Date): boolean {

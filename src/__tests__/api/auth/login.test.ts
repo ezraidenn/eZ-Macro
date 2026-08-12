@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/auth/login/route";
+import { resetRateLimits } from "@/lib/rate-limit";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ afterAll(() => {
 describe("POST /api/auth/login", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetRateLimits();
   });
 
   it("returns 401 for missing body fields", async () => {

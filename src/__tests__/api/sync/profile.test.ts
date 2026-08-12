@@ -74,6 +74,27 @@ describe("POST /api/sync/profile", () => {
     expect(res.status).toBe(400);
   });
 
+  it("does NOT touch locale/theme on update when the body omits them (preserva preferencias)", async () => {
+    const req = makeRequest(validProfile); // sin locale ni theme
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const upsertArgs = mockUpsert.mock.calls[0][0];
+    expect(upsertArgs.update.locale).toBeUndefined();
+    expect(upsertArgs.update.theme).toBeUndefined();
+    // create sí lleva defaults (perfil nuevo)
+    expect(upsertArgs.create.locale).toBe("es");
+    expect(upsertArgs.create.theme).toBe("dark");
+  });
+
+  it("updates locale/theme when explicitly provided", async () => {
+    const req = makeRequest({ ...validProfile, locale: "en", theme: "light" });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const upsertArgs = mockUpsert.mock.calls[0][0];
+    expect(upsertArgs.update.locale).toBe("en");
+    expect(upsertArgs.update.theme).toBe("light");
+  });
+
   it("accepts all valid goalTypes", async () => {
     for (const goalType of ["cut", "bulk", "maintain", "recomp"]) {
       mockUpsert.mockResolvedValue({ ...savedProfile, goalType });

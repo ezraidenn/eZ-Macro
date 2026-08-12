@@ -10,7 +10,8 @@
     "test:coverage": "jest --coverage",
     "lint": "next lint",
     "postinstall": "npx prisma generate",
-    "db:check": "npx ts-node --transpile-only scripts/check-db.ts"
+    "db:check": "npx ts-node --transpile-only scripts/check-db.ts",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
@@ -47,7 +48,6 @@
     "react-hot-toast": "^2.4.1",
     "recharts": "^2.12.0",
     "resend": "^6.9.4",
-    "sharp": "^0.34.5",
     "tailwind-merge": "^2.2.1",
     "uuid": "^9.0.0",
     "ws": "^8.19.0",
@@ -70,6 +70,7 @@
     "msw": "^2.13.2",
     "postcss": "^8.4.33",
     "prisma": "^7.4.0",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.1",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",

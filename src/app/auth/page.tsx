@@ -63,15 +63,12 @@ export default function AuthPage() {
       switchUserStore(data.userId);
 
       if (mode === "login" && data.hasProfile) {
-        // Sync all user data from server (profile, meals, weights)
+        // Sync all user data from server (profile, meals, weights).
+        // hasProfile viene del login: aunque el sync falle por red, el usuario
+        // tiene cuenta completa — jamás mandarlo a re-onboarding (machacaría
+        // su perfil). El StoreHydrator reintenta el sync si hizo falta.
         await syncUserDataFromServer();
-        // Go to dashboard if we have a profile (from DB sync or localStorage)
-        if (useStore.getState().profile) {
-          router.replace("/dashboard");
-        } else {
-          // Sync failed AND no localStorage data — must re-onboard
-          router.replace("/onboarding");
-        }
+        router.replace("/dashboard");
       } else {
         router.replace("/onboarding");
       }

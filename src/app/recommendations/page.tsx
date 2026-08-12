@@ -96,6 +96,9 @@ export default function RecommendationsPage() {
           priorities,
           targets,
           profile: profile ? { goalType: profile.goalType, trainingLevel: profile.trainingLevel } : undefined,
+          // El servidor corre en UTC: mandarle la hora local para que sugiera
+          // desayuno/comida/cena según la hora real del usuario.
+          localHour: new Date().getHours(),
         }),
       });
 

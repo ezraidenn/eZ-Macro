@@ -5,6 +5,8 @@ import {
   percentage,
   remaining,
   formatDateKey,
+  addDaysToDateKey,
+  diffInDays,
   isSameDay,
   getDaysInRange,
   movingAverage,
@@ -146,6 +148,52 @@ describe("formatDateKey", () => {
     const date = new Date("2024-12-31T12:00:00Z");
     const key = formatDateKey(date);
     expect(key.length).toBe(10); // YYYY-MM-DD = 10 chars
+  });
+
+  it("uses LOCAL date, not UTC: a late-evening local time stays on the same local day", () => {
+    // 23:30 hora local — con toISOString() (UTC) esto caía en el día siguiente
+    // para timezones negativos (p. ej. México), que era el bug original.
+    const date = new Date(2024, 5, 15, 23, 30, 0); // 15 jun 2024, 23:30 local
+    expect(formatDateKey(date)).toBe("2024-06-15");
+  });
+
+  it("uses LOCAL date at start of day", () => {
+    const date = new Date(2024, 5, 15, 0, 10, 0); // 15 jun 2024, 00:10 local
+    expect(formatDateKey(date)).toBe("2024-06-15");
+  });
+});
+
+// ─── addDaysToDateKey / diffInDays ───────────────────────────────────────────
+
+describe("addDaysToDateKey", () => {
+  it("adds days across month boundaries", () => {
+    expect(addDaysToDateKey("2024-01-30", 3)).toBe("2024-02-02");
+  });
+
+  it("subtracts days with negative input", () => {
+    expect(addDaysToDateKey("2024-03-01", -1)).toBe("2024-02-29"); // año bisiesto
+  });
+
+  it("zero days returns the same key", () => {
+    expect(addDaysToDateKey("2024-06-15", 0)).toBe("2024-06-15");
+  });
+});
+
+describe("diffInDays", () => {
+  it("returns positive difference when b is after a", () => {
+    expect(diffInDays("2024-06-01", "2024-06-15")).toBe(14);
+  });
+
+  it("returns 0 for the same day", () => {
+    expect(diffInDays("2024-06-15", "2024-06-15")).toBe(0);
+  });
+
+  it("returns negative when b is before a", () => {
+    expect(diffInDays("2024-06-15", "2024-06-10")).toBe(-5);
+  });
+
+  it("crosses month boundaries correctly", () => {
+    expect(diffInDays("2024-01-25", "2024-02-05")).toBe(11);
   });
 });
 

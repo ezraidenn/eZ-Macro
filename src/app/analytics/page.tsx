@@ -6,6 +6,7 @@ import { useStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { MetricCard } from "@/components/ui/metric-card";
 import { calculateAdaptiveTDEE } from "@/lib/calculations";
+import { formatDateKey, addDaysToDateKey, diffInDays } from "@/lib/utils";
 import {
   Flame,
   Target,
@@ -43,10 +44,10 @@ export default function AnalyticsPage() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().split("T")[0];
+      const key = formatDateKey(d); // clave en hora local, igual que el registro
       const log = dayLogs[key];
       days.push({
-        date: d.toLocaleDateString("en-US", { weekday: "short" }),
+        date: d.toLocaleDateString(locale === "es" ? "es-MX" : "en-US", { weekday: "short" }),
         calories: log?.totals.calories ?? 0,
         protein: log?.totals.protein ?? 0,
         carbs: log?.totals.carbs ?? 0,
@@ -54,7 +55,7 @@ export default function AnalyticsPage() {
       });
     }
     return days;
-  }, [dayLogs]);
+  }, [dayLogs, locale]);
 
   const avgCalories = useMemo(() => {
     const logged = last7Days.filter((d) => d.calories > 0);
@@ -81,12 +82,36 @@ export default function AnalyticsPage() {
   }, [last7Days, targets]);
 
   const adaptiveTDEE = useMemo(() => {
-    if (weights.length < 7 || avgCalories === 0) return null;
-    const recent = weights.slice(-14);
-    if (recent.length < 7) return null;
-    const weightChange = recent[recent.length - 1].weight - recent[0].weight;
-    return calculateAdaptiveTDEE(avgCalories, weightChange, recent.length);
-  }, [weights, avgCalories]);
+    if (weights.length < 2) return null;
+
+    // Ventana: pesos dentro de los últimos 14 días NATURALES. Antes se usaba
+    // "las últimas 14 entradas" y se pasaba el número de entradas como si
+    // fueran días — con pesajes esporádicos el TDEE salía disparatado.
+    const today = formatDateKey(new Date());
+    const cutoff = addDaysToDateKey(today, -13);
+    const recent = weights.filter((w) => w.date >= cutoff);
+    if (recent.length < 2) return null;
+
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    const spanDays = diffInDays(first.date, last.date);
+    if (spanDays < 7) return null; // muy poco intervalo para estimar
+
+    // Calorías promedio de los días registrados DENTRO del mismo intervalo
+    // (misma ventana para energía y peso, si no la fórmula no cuadra)
+    const loggedCalories: number[] = [];
+    for (let key = first.date; key <= last.date; key = addDaysToDateKey(key, 1)) {
+      const cals = dayLogs[key]?.totals.calories ?? 0;
+      if (cals > 0) loggedCalories.push(cals);
+    }
+    // Con menos de la mitad de los días registrados, el promedio no es confiable
+    if (loggedCalories.length < Math.ceil(spanDays / 2)) return null;
+
+    const avgCals = loggedCalories.reduce((s, c) => s + c, 0) / loggedCalories.length;
+    const weightChange = last.weight - first.weight;
+    const tdee = calculateAdaptiveTDEE(Math.round(avgCals), weightChange, spanDays);
+    return tdee > 0 ? tdee : null;
+  }, [weights, dayLogs]);
 
   const macroDistribution = useMemo(() => {
     const totalP = last7Days.reduce((s, d) => s + d.protein, 0);

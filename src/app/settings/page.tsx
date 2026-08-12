@@ -26,7 +26,18 @@ export default function SettingsPage() {
     setUserId(null);
     // 4. Clear app store in memory (privacy: don't leave data in memory)
     switchUserStore(null);
-    // 5. Navigate to auth
+    // 5. Purge service worker caches: en dispositivos compartidos, respuestas
+    //    cacheadas (p. ej. /api/auth/me de versiones previas) no deben
+    //    sobrevivir al logout.
+    try {
+      if (typeof caches !== "undefined") {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {
+      // best effort — no bloquear el logout
+    }
+    // 6. Navigate to auth
     router.replace("/auth");
   }
 

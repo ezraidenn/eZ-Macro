@@ -19,7 +19,9 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import type { SavedShake, MealEntry, MealFoodEntry } from "@/lib/types";
+import type { SavedShake, MealFoodEntry } from "@/lib/types";
+import { createMealOnServer } from "@/lib/meal-sync";
+import { compressImage } from "@/lib/image";
 
 export default function ShakesPage() {
   const router = useRouter();
@@ -35,28 +37,6 @@ export default function ShakesPage() {
   const [description, setDescription] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const compressImage = useCallback(async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX = 1024;
-        let w = img.width;
-        let h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else { w = Math.round(w * MAX / h); h = MAX; }
-        }
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d")!;
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
-      };
-      img.src = URL.createObjectURL(file);
-    });
-  }, []);
 
   const pickPhoto = useCallback((useCamera: boolean = false) => {
     if (images.length >= 3) return;
@@ -76,7 +56,7 @@ export default function ShakesPage() {
       }
     };
     input.click();
-  }, [images.length, compressImage]);
+  }, [images.length]);
 
   async function analyzeShake() {
     if (images.length === 0 && !description) {
@@ -140,7 +120,7 @@ export default function ShakesPage() {
     }
   }
 
-  function quickAddShake(shake: SavedShake) {
+  async function quickAddShake(shake: SavedShake) {
     const now = new Date();
     const foodEntry: MealFoodEntry = {
       id: uuid(),
@@ -163,18 +143,30 @@ export default function ShakesPage() {
       fiber: shake.fiber,
     };
 
-    const meal: MealEntry = {
-      id: uuid(),
-      type: "snack",
-      name: shake.name,
-      time: `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`,
-      foods: [foodEntry],
-      aiAnalyzed: false,
-      verified: true,
-    };
+    // Server-first, igual que el registro normal de comidas: antes solo se
+    // agregaba al store local y la comida no existía en la BD (invisible en
+    // otros dispositivos y borrada por el siguiente rebuild del sync).
+    const result = await createMealOnServer(
+      {
+        id: uuid(),
+        type: "snack",
+        name: shake.name,
+        time: `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`,
+        foods: [foodEntry],
+        aiAnalyzed: false,
+        verified: true,
+      },
+      currentDate
+    );
 
-    addMeal(currentDate, meal);
-    toast.success(locale === "es" ? `${shake.name} agregado` : `${shake.name} added`);
+    if (result.ok) {
+      addMeal(currentDate, result.meal);
+      toast.success(locale === "es" ? `${shake.name} agregado` : `${shake.name} added`);
+    } else {
+      toast.error(
+        locale === "es" ? "No se pudo guardar el batido" : "Failed to save shake"
+      );
+    }
   }
 
   return (

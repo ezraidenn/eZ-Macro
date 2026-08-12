@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/auth/register/route";
+import { resetRateLimits } from "@/lib/rate-limit";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ afterAll(() => {
 describe("POST /api/auth/register", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetRateLimits();
     mockFindUnique.mockResolvedValue(null); // no existing user by default
     mockCreate.mockResolvedValue({ id: "new-user-id", email: "test@example.com" });
   });

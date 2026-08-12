@@ -475,6 +475,20 @@ describe("calculateWeightMovingAvg", () => {
     // The spike at day 2 is more pronounced without smoothing
     expect(result[6].movingAvg).toBeLessThan(weights[1].weight);
   });
+
+  it("window is calendar days, not entry count: sparse entries outside 7 days are excluded", () => {
+    const weights = [
+      { date: "2024-01-01", weight: 90 }, // hace semanas — no debe entrar en la ventana
+      { date: "2024-01-02", weight: 90 },
+      { date: "2024-02-01", weight: 80 },
+      { date: "2024-02-03", weight: 82 },
+    ];
+    const result = calculateWeightMovingAvg(weights, 7);
+    // 2024-02-03: ventana = [2024-01-28 .. 2024-02-03] → solo 80 y 82
+    expect(result[3].movingAvg).toBeCloseTo(81, 2);
+    // 2024-02-01: ventana solo lo incluye a él
+    expect(result[2].movingAvg).toBeCloseTo(80, 2);
+  });
 });
 
 // ─── suggestAdjustment ───────────────────────────────────────────────────────

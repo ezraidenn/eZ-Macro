@@ -1,3 +1,5 @@
+"use client";
+
 export default function OfflinePage() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4 text-center">
@@ -6,8 +8,14 @@ export default function OfflinePage() {
       <p className="text-muted-foreground">
         Parece que no tienes conexión a internet.
         <br />
-        Algunas funciones pueden no estar disponibles.
+        Tus datos guardados siguen disponibles en las pantallas que ya visitaste.
       </p>
+      <button
+        onClick={() => window.location.reload()}
+        className="mt-6 rounded-xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-black active:bg-emerald-600 transition-colors"
+      >
+        Reintentar
+      </button>
     </div>
   );
 }

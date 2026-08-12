@@ -10,12 +10,12 @@ import { FoodSearchModal } from "@/components/ui/food-search-modal";
 import { cn, formatDateKey } from "@/lib/utils";
 import {
   type MealType,
-  type MealEntry,
   type MealFoodEntry,
   type AIFoodAnalysis,
   type SavedMealTemplate,
-  MEAL_LABELS,
 } from "@/lib/types";
+import { createMealOnServer } from "@/lib/meal-sync";
+import { compressImage } from "@/lib/image";
 import {
   Camera,
   Upload,
@@ -71,34 +71,6 @@ export default function LogPage() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const compressImage = useCallback(async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const objectUrl = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        const canvas = document.createElement("canvas");
-        const MAX = 1024;
-        let w = img.width;
-        let h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else        { w = Math.round(w * MAX / h); h = MAX; }
-        }
-        canvas.width  = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d")!;
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error("Failed to load image"));
-      };
-      img.src = objectUrl;
-    });
-  }, []);
-
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null);
     try {
@@ -108,7 +80,7 @@ export default function LogPage() {
     } catch {
       setError("Error al cargar la imagen");
     }
-  }, [compressImage]);
+  }, []);
 
   const addMorePhotos = useCallback(() => {
     if (imagePreviews.length >= 3) return;
@@ -126,7 +98,7 @@ export default function LogPage() {
       }
     };
     input.click();
-  }, [imagePreviews.length, compressImage]);
+  }, [imagePreviews.length]);
 
   const removePhoto = useCallback((index: number) => {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
@@ -211,69 +183,28 @@ export default function LogPage() {
     const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
     try {
-      const res = await fetch("/api/sync/meals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          meal: {
-            type:       mealType,
-            name:       MEAL_LABELS[mealType],
-            time,
-            foods,
-            photoUrl:   imagePreviews[0] ?? null,
-            aiAnalyzed: !!analysis,
-            verified:   true,
-          },
-          date: currentDate,
-        }),
-      });
+      // Server-first con id generado por el cliente: reintentos no duplican
+      const result = await createMealOnServer(
+        {
+          id:         uuid(),
+          type:       mealType,
+          name:       getMealLabel(locale, mealType),
+          time,
+          foods,
+          photoUrl:   imagePreviews[0] ?? null,
+          aiAnalyzed: !!analysis,
+          verified:   true,
+        },
+        currentDate
+      );
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        console.error("[saveMeal] API error:", res.status, errorData);
-        toast.error(t(locale, "log.saveError") + ": " + (errorData.error || res.status));
+      if (!result.ok) {
+        console.error("[saveMeal] API error:", result.status, result.error);
+        toast.error(t(locale, "log.saveError") + ": " + result.error);
         return;
       }
 
-      const responseData = await res.json();
-      console.log("[saveMeal] API success:", responseData);
-      const { meal: saved } = responseData;
-
-      const meal: MealEntry = {
-        id:         saved.id,
-        type:       saved.type as MealType,
-        name:       saved.name,
-        time:       saved.time,
-        photoUrl:   saved.photoUrl ?? undefined,
-        aiAnalyzed: saved.aiAnalyzed,
-        verified:   saved.verified,
-        foods: saved.foods.map((f: {
-          id: string; name: string; servingSize: number; servingUnit: string;
-          servings: number; calories: number; protein: number; carbs: number;
-          fat: number; fiber: number;
-        }): MealFoodEntry => ({
-          id: f.id,
-          food: {
-            id: f.id,
-            name: f.name,
-            servingSize: f.servingSize,
-            servingUnit: f.servingUnit,
-            calories: f.calories,
-            protein:  f.protein,
-            carbs:    f.carbs,
-            fat:      f.fat,
-            fiber:    f.fiber,
-          },
-          servings:  f.servings,
-          calories:  f.calories,
-          protein:   f.protein,
-          carbs:     f.carbs,
-          fat:       f.fat,
-          fiber:     f.fiber,
-        })),
-      };
-
-      addMeal(currentDate, meal);
+      addMeal(currentDate, result.meal);
       toast.success(t(locale, "log.mealSaved"));
       router.push("/dashboard");
     } catch {

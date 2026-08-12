@@ -20,12 +20,6 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "eZMacro",
-    startupImage: [
-      {
-        url: "/apple-splash-2048-2732.jpg",
-        media: "(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
-      },
-    ],
   },
   icons: {
     icon: [
@@ -34,7 +28,7 @@ export const metadata: Metadata = {
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [
-      { url: "/icon-192.png", sizes: "192x192" },
+      { url: "/apple-touch-icon.png", sizes: "180x180" },
     ],
   },
 };
@@ -45,10 +39,11 @@ export const viewport: Viewport = {
   maximumScale: 5,
   minimumScale: 1,
   userScalable: true,
-  themeColor: "#0a0a0a",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
   viewportFit: "cover",
-  // PWA specific
-  colorScheme: "dark",
 };
 
 export default function RootLayout({

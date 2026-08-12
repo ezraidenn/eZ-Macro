@@ -3,6 +3,9 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// movingAvg se acepta por compatibilidad pero se ignora: es un valor derivado
+// que el cliente recalcula siempre (guardarlo en BD lo dejaba obsoleto en
+// cuanto se agregaba un peso retroactivo).
 const weightSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)"),
   weight: z.number().min(20).max(500),
@@ -24,12 +27,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { date, weight, movingAvg } = parsed.data;
+    const { date, weight } = parsed.data;
 
     const entry = await prisma.weightEntry.upsert({
       where: { userId_date: { userId: session.userId, date } },
-      update: { weight, movingAvg: movingAvg ?? null },
-      create: { userId: session.userId, date, weight, movingAvg: movingAvg ?? null },
+      update: { weight },
+      create: { userId: session.userId, date, weight },
     });
 
     return NextResponse.json({ success: true, entry });

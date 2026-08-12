@@ -10,7 +10,9 @@ import {
   ChevronRight,
   Trash2,
 } from "lucide-react";
-import { type MealEntry, type MealType, MEAL_LABELS } from "@/lib/types";
+import { type MealEntry, type MealType } from "@/lib/types";
+import { useStore } from "@/lib/store";
+import { getMealLabel } from "@/lib/i18n";
 
 const MEAL_ICONS: Record<MealType, React.ElementType> = {
   breakfast: Sun,
@@ -34,12 +36,21 @@ interface MealCardProps {
 }
 
 export function MealCard({ meal, onTap, onDelete, delay = 0 }: MealCardProps) {
+  const locale = useStore((s) => s.locale);
   const Icon = MEAL_ICONS[meal.type];
   const colorClass = MEAL_COLORS[meal.type];
   const totalCals = meal.foods.reduce((s, f) => s + f.calories, 0);
   const totalProtein = meal.foods.reduce((s, f) => s + f.protein, 0);
   const totalCarbs = meal.foods.reduce((s, f) => s + f.carbs, 0);
   const totalFat = meal.foods.reduce((s, f) => s + f.fat, 0);
+
+  // Mostrar el nombre real de la comida (p. ej. un batido) cuando lo tiene;
+  // los nombres genéricos ("Lunch"/"Almuerzo") se muestran localizados.
+  const genericNames = [getMealLabel("es", meal.type), getMealLabel("en", meal.type)];
+  const title =
+    meal.name && !genericNames.includes(meal.name)
+      ? meal.name
+      : getMealLabel(locale, meal.type);
 
   return (
     <div
@@ -61,7 +72,7 @@ export function MealCard({ meal, onTap, onDelete, delay = 0 }: MealCardProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold">{MEAL_LABELS[meal.type]}</p>
+              <p className="text-sm font-semibold">{title}</p>
               <p className="text-[11px] text-muted-foreground">{meal.time}</p>
             </div>
             <div className="flex items-center gap-2">

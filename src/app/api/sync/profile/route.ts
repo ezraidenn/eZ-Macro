@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 const profileSchema = z.object({
   name: z.string().min(1).max(100),
   gender: z.enum(["male", "female"]),
-  age: z.number().int().min(10).max(120),
+  age: z.number().int().min(14).max(120),
   height: z.number().min(50).max(300),
   weight: z.number().min(20).max(500),
   activityLevel: z.enum(["sedentary", "light", "moderate", "active", "very_active"]),
@@ -44,8 +44,10 @@ export async function POST(req: NextRequest) {
         activityLevel: data.activityLevel,
         trainingLevel: data.trainingLevel,
         goalType: data.goalType,
-        locale: data.locale ?? "es",
-        theme: data.theme ?? "dark",
+        // locale/theme solo se tocan si vienen en el body: si no, un "guardar
+        // perfil" cualquiera reseteaba las preferencias guardadas por PATCH.
+        ...(data.locale ? { locale: data.locale } : {}),
+        ...(data.theme ? { theme: data.theme } : {}),
       },
       create: {
         userId: session.userId,
