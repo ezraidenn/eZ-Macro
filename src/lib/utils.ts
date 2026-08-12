@@ -87,3 +87,18 @@ export function movingAverage(values: number[], window: number): number {
   const slice = values.slice(-window);
   return slice.reduce((a, b) => a + b, 0) / slice.length;
 }
+
+// Unidades de masa/volumen: los alimentos medidos en ellas se ajustan por
+// gramos; cualquier otra unidad ("pza", "tortilla", "rebanada", "cda"…)
+// se trata como contable y se ajusta por piezas.
+const MASS_VOLUME_UNITS = new Set([
+  "g", "gr", "grs", "gramo", "gramos",
+  "kg", "mg",
+  "ml", "cl", "l", "lt", "litro", "litros",
+  "oz", "lb",
+]);
+
+export function isCountableUnit(unit: string | undefined | null): boolean {
+  if (!unit) return false;
+  return !MASS_VOLUME_UNITS.has(unit.trim().toLowerCase());
+}

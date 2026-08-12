@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSession } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { normalizeUnitFields } from "@/lib/analysis";
 
 const RATE_LIMIT = 20; // análisis por hora por usuario
 const WINDOW_MS = 60 * 60 * 1000;
@@ -81,6 +82,36 @@ GUÍA DE PORCIONES ESTÁNDAR MÉXICO:
 - Arroz cocido: 150-200g porción estándar (1 taza)
 - Frijoles: 100-150g porción
 - Aguacate: 1/4 = 50g, 1/2 = 100g, 1 entero = 200g
+
+PASO 3.5: DESGLOSE POR UNIDADES (CRÍTICO PARA PRECISIÓN)
+Para CADA alimento decide si es CONTABLE: se distingue en piezas a simple vista
+(huevos, tortillas, tacos, rebanadas de pan/pizza, tamales, galletas, quesadillas,
+sopes, piezas de pollo, hot cakes, latas/botellas de bebida, cucharadas SOLO si
+el usuario las menciona).
+
+Si es contable, CUENTA LAS PIEZAS UNA POR UNA en la imagen y reporta:
+- "countable": true
+- "unitCount": número de piezas contadas (usa .5 SOLO si hay media pieza clara)
+- "unitLabel": sustantivo corto en español, singular ("pza", "tortilla",
+  "rebanada", "taco", "huevo", "lata", "cda")
+- "gramsPerUnit": peso estimado POR PIEZA (usa la guía de porciones)
+- "estimatedGrams" DEBE ser exactamente unitCount × gramsPerUnit
+- calories/protein/carbs/fat/fiber del item siguen siendo el TOTAL de TODAS las piezas
+
+Si NO es contable (arroz, frijoles, guisados, ensaladas, purés, salsas, sopas):
+- "countable": false y omite unitCount/unitLabel/gramsPerUnit
+- estima por gramos como siempre
+
+Ejemplos:
+- 3 huevos revueltos → countable: true, unitCount: 3, unitLabel: "huevo",
+  gramsPerUnit: 50, estimatedGrams: 150, calories: 233 (total de los 3)
+- 5 tortillas de maíz → countable: true, unitCount: 5, unitLabel: "tortilla",
+  gramsPerUnit: 28, estimatedGrams: 140
+- Frijoles refritos → countable: false, estimatedGrams: 120
+
+El usuario podrá corregir el conteo con ±1 pieza, así que unitCount y
+gramsPerUnit deben ser lo más precisos posible: si dudas entre 2 y 3 tortillas,
+reporta tu mejor conteo y baja "confidence".
 
 PASO 4: CÁLCULO DE MACROS POR ITEM
 Usa valores de composición REALISTAS (no optimistas):
@@ -272,6 +303,10 @@ FORMATO DE SALIDA (JSON válido, sin markdown):
       "quantity": "Descripción (ej: 1 pieza, 6 tortillas, 200g)",
       "estimatedGrams": 200,
       "gramsRange": {"min": 160, "max": 240},
+      "countable": true,
+      "unitCount": 3,
+      "unitLabel": "pza",
+      "gramsPerUnit": 67,
       "visualCues": "Señales observadas (piel, aceite, tamaño vs referencia)",
       "confidence": "high|medium|low",
       "calories": 450,
@@ -323,6 +358,7 @@ REGLAS CRÍTICAS:
 13. **CALORÍAS = FÓRMULA OBLIGATORIA: Para CADA alimento, calories DEBE ser exactamente (protein×4 + carbs×4 + fat×9). NO uses valores de tablas.**
 14. **VERIFICACIÓN MATEMÁTICA: Antes de enviar el JSON, verifica que CADA item cumple: |calories - (P×4+C×4+F×9)| < 5 kcal**
 15. **CONTEXTO DEL USUARIO: Si el usuario especificó cantidades, ingredientes o nombre del plato, esos valores tienen prioridad ABSOLUTA sobre tu estimación visual.**
+16. **DESGLOSE UNITARIO: Para todo alimento contable reporta countable/unitCount/unitLabel/gramsPerUnit contando las piezas UNA POR UNA. estimatedGrams = unitCount × gramsPerUnit, y los macros del item son el TOTAL de todas las piezas. Si el usuario dijo cuántas piezas hay, usa ESE número.**
 
 OBJETIVO: Precisión realista, no optimismo fitness. Mejor sobrestimar 10% que subestimar 30%.
 
@@ -442,9 +478,9 @@ export async function POST(req: NextRequest) {
       return item;
     };
 
-    // Validate each food item
+    // Validate each food item + normalizar el desglose por unidades
     if (parsed.foods && Array.isArray(parsed.foods)) {
-      parsed.foods = parsed.foods.map(validateAndCorrectCalories);
+      parsed.foods = parsed.foods.map(validateAndCorrectCalories).map(normalizeUnitFields);
     }
 
     // Recalculate totals based on corrected individual items

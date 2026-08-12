@@ -82,6 +82,8 @@ export interface MealFoodEntry {
   carbs: number;
   fat: number;
   fiber: number;
+  /** Confianza del análisis IA (solo UI de revisión; no se persiste). */
+  aiConfidence?: "low" | "medium" | "high";
 }
 
 export interface DayLog {
@@ -112,6 +114,13 @@ export interface AIFoodAnalysis {
     fat: number;
     fiber: number;
     caloriesRange?: { min: number; max: number };
+    // Desglose por unidades: para alimentos contables (huevos, tortillas,
+    // tacos, rebanadas…) la IA reporta el conteo y el peso por pieza.
+    // Los macros del item siguen siendo TOTALES (todas las piezas).
+    countable?: boolean;
+    unitCount?: number; // piezas contadas (múltiplos de 0.5)
+    unitLabel?: string; // "pza", "tortilla", "rebanada", "taco", "cda"…
+    gramsPerUnit?: number; // peso estimado por pieza
   }[];
   totalCalories: number;
   totalProtein: number;

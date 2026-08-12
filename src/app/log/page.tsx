@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { FoodSearchModal } from "@/components/ui/food-search-modal";
-import { cn, formatDateKey } from "@/lib/utils";
+import { cn, isCountableUnit } from "@/lib/utils";
 import {
   type MealType,
   type MealFoodEntry,
@@ -104,23 +104,44 @@ export default function LogPage() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  function adjustServing(index: number, delta: number) {
+  // Ajuste por pasos según el tipo de alimento:
+  // - contable (huevos, tortillas…): ±1 pieza — si la IA contó mal, el usuario
+  //   corrige exactamente una unidad y los macros escalan por pieza.
+  // - por gramos: paso adaptativo (±5g/±10g/±25g según el tamaño de la porción).
+  // Convención: f.food.* son macros POR PORCIÓN (por pieza en contables);
+  // los totales del entry siempre se derivan como food.* × servings.
+  function adjustFood(index: number, direction: 1 | -1) {
     setFoods((prev) =>
       prev.map((f, i) => {
         if (i !== index) return f;
-        const newServings = Math.max(0.25, f.servings + delta * 0.25);
-        const ratio = newServings / f.servings;
+
+        let newServings: number;
+        if (isCountableUnit(f.food.servingUnit)) {
+          newServings = Math.max(1, f.servings + direction);
+        } else {
+          const gramsBase = f.food.servingSize || 1;
+          const gramsNow = gramsBase * f.servings;
+          const step = gramsNow < 50 ? 5 : gramsNow <= 250 ? 10 : 25;
+          const newGrams = Math.max(step, gramsNow + direction * step);
+          newServings = newGrams / gramsBase;
+        }
+
         return {
           ...f,
           servings: newServings,
-          calories: f.calories * ratio,
-          protein:  f.protein  * ratio,
-          carbs:    f.carbs    * ratio,
-          fat:      f.fat      * ratio,
-          fiber:    f.fiber    * ratio,
+          calories: f.food.calories * newServings,
+          protein:  f.food.protein  * newServings,
+          carbs:    f.food.carbs    * newServings,
+          fat:      f.food.fat      * newServings,
+          fiber:    f.food.fiber    * newServings,
         };
       })
     );
+  }
+
+  // "3" para enteros, "2.5" para medias piezas
+  function formatCount(n: number): string {
+    return n % 1 === 0 ? n.toString() : n.toFixed(1);
   }
 
   function removeFood(index: number) {
@@ -420,26 +441,40 @@ export default function LogPage() {
                       }
                       const data: AIFoodAnalysis = await res.json();
                       setAnalysis(data);
-                      const mapped: MealFoodEntry[] = data.foods.map((f) => ({
-                        id: uuid(),
-                        food: {
+                      const mapped: MealFoodEntry[] = data.foods.map((f) => {
+                        // Desglose por unidades: para contables, food.* guarda
+                        // los macros POR PIEZA y servings el conteo — así el
+                        // stepper de ±1 suma exactamente una pieza.
+                        const isUnit =
+                          f.countable === true &&
+                          typeof f.unitCount === "number" &&
+                          f.unitCount > 0 &&
+                          typeof f.gramsPerUnit === "number" &&
+                          f.gramsPerUnit > 0;
+                        const count = isUnit ? f.unitCount! : 1;
+
+                        return {
                           id: uuid(),
-                          name:        f.name,
-                          servingSize: f.estimatedGrams,
-                          servingUnit: "g",
-                          calories:    f.calories,
-                          protein:     f.protein,
-                          carbs:       f.carbs,
-                          fat:         f.fat,
-                          fiber:       f.fiber,
-                        },
-                        servings:  1,
-                        calories:  f.calories,
-                        protein:   f.protein,
-                        carbs:     f.carbs,
-                        fat:       f.fat,
-                        fiber:     f.fiber,
-                      }));
+                          food: {
+                            id: uuid(),
+                            name:        f.name,
+                            servingSize: isUnit ? f.gramsPerUnit! : f.estimatedGrams,
+                            servingUnit: isUnit ? (f.unitLabel || "pza") : "g",
+                            calories:    f.calories / count,
+                            protein:     f.protein  / count,
+                            carbs:       f.carbs    / count,
+                            fat:         f.fat      / count,
+                            fiber:       f.fiber    / count,
+                          },
+                          servings:  count,
+                          calories:  f.calories,
+                          protein:   f.protein,
+                          carbs:     f.carbs,
+                          fat:       f.fat,
+                          fiber:     f.fiber,
+                          aiConfidence: f.confidence,
+                        };
+                      });
                       setFoods(mapped);
                       setMode("review");
                     } catch (err: any) {
@@ -538,44 +573,59 @@ export default function LogPage() {
                   </button>
                 </div>
 
-                {foods.map((f, i) => (
-                  <div key={f.id} className="glass-card rounded-xl p-3 space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">{f.food.name}</p>
-                        {f.food.brand && (
-                          <p className="text-[10px] text-muted-foreground">{f.food.brand}</p>
-                        )}
-                        <p className="text-[10px] text-muted-foreground">
-                          {Math.round(f.food.servingSize * f.servings)}g
-                        </p>
+                {foods.map((f, i) => {
+                  const countable = isCountableUnit(f.food.servingUnit);
+                  return (
+                    <div key={f.id} className="glass-card rounded-xl p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold truncate">{f.food.name}</p>
+                            {f.aiConfidence === "low" && (
+                              <span
+                                title={locale === "es" ? "Confianza baja — verifica la cantidad" : "Low confidence — verify the amount"}
+                                className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"
+                              />
+                            )}
+                          </div>
+                          {f.food.brand && (
+                            <p className="text-[10px] text-muted-foreground">{f.food.brand}</p>
+                          )}
+                          <p className="text-[10px] text-muted-foreground tabular-nums">
+                            {countable
+                              ? `≈${Math.round(f.food.servingSize)}g y ${Math.round(f.food.calories)} kcal por ${f.food.servingUnit} · ${Math.round(f.food.servingSize * f.servings)}g total`
+                              : `${Math.round(f.food.servingSize * f.servings)}g`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => adjustFood(i, -1)} className="p-1 rounded-lg bg-secondary">
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="min-w-[3.25rem] px-0.5 text-center text-xs font-medium tabular-nums">
+                            {countable
+                              ? `${formatCount(f.servings)} ${f.food.servingUnit}`
+                              : `${Math.round(f.food.servingSize * f.servings)} g`}
+                          </span>
+                          <button onClick={() => adjustFood(i, 1)} className="p-1 rounded-lg bg-secondary">
+                            <Plus className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => removeFood(i)}
+                            className="p-1 rounded-lg text-red-400 hover:bg-red-500/10 ml-1"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => adjustServing(i, -1)} className="p-1 rounded-lg bg-secondary">
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="w-8 text-center text-xs font-medium tabular-nums">
-                          {f.servings.toFixed(2)}
-                        </span>
-                        <button onClick={() => adjustServing(i, 1)} className="p-1 rounded-lg bg-secondary">
-                          <Plus className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => removeFood(i)}
-                          className="p-1 rounded-lg text-red-400 hover:bg-red-500/10 ml-1"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
+                      <div className="flex gap-3 text-[10px]">
+                        <span className="text-emerald-400 tabular-nums">{Math.round(f.calories)} kcal</span>
+                        <span className="text-indigo-400 tabular-nums">P {Math.round(f.protein)}g</span>
+                        <span className="text-amber-400 tabular-nums">C {Math.round(f.carbs)}g</span>
+                        <span className="text-red-400 tabular-nums">F {Math.round(f.fat)}g</span>
                       </div>
                     </div>
-                    <div className="flex gap-3 text-[10px]">
-                      <span className="text-emerald-400 tabular-nums">{Math.round(f.calories)} kcal</span>
-                      <span className="text-indigo-400 tabular-nums">P {Math.round(f.protein)}g</span>
-                      <span className="text-amber-400 tabular-nums">C {Math.round(f.carbs)}g</span>
-                      <span className="text-red-400 tabular-nums">F {Math.round(f.fat)}g</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Totals */}

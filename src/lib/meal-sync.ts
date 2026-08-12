@@ -41,28 +41,32 @@ export function mapServerMeal(dbMeal: ServerMealDto): MealEntry {
     time: dbMeal.time,
     aiAnalyzed: dbMeal.aiAnalyzed,
     verified: dbMeal.verified,
-    foods: dbMeal.foods.map(
-      (f): MealFoodEntry => ({
+    foods: dbMeal.foods.map((f): MealFoodEntry => {
+      // La BD guarda macros TOTALES por línea + servings (p. ej. 3 huevos).
+      // food.* es POR PORCIÓN: derivarlo mantiene la base por-pieza tras el
+      // round-trip (con servings = 1 es idéntico a antes).
+      const servings = f.servings > 0 ? f.servings : 1;
+      return {
         id: f.id,
         food: {
           id: f.id,
           name: f.name,
           servingSize: f.servingSize,
           servingUnit: f.servingUnit,
-          calories: f.calories,
-          protein: f.protein,
-          carbs: f.carbs,
-          fat: f.fat,
-          fiber: f.fiber,
+          calories: f.calories / servings,
+          protein: f.protein / servings,
+          carbs: f.carbs / servings,
+          fat: f.fat / servings,
+          fiber: f.fiber / servings,
         },
-        servings: f.servings,
+        servings,
         calories: f.calories,
         protein: f.protein,
         carbs: f.carbs,
         fat: f.fat,
         fiber: f.fiber,
-      })
-    ),
+      };
+    }),
   };
 }
 

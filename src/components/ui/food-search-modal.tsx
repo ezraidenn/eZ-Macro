@@ -319,27 +319,32 @@ export function FoodSearchModal({ open, onClose, onAddFood, onLoadTemplate, curr
   }, [handleAddFood, onClose, locale]);
 
   const handleLoadTemplate = useCallback((template: SavedMealTemplate) => {
-    const foods: MealFoodEntry[] = template.foods.map((f) => ({
-      id: uuid(),
-      food: {
+    const foods: MealFoodEntry[] = template.foods.map((f) => {
+      // La plantilla guarda TOTALES por línea; food.* debe ser POR PORCIÓN
+      // para que los steppers (±1 pieza / ±gramos) escalen bien.
+      const servings = f.servings > 0 ? f.servings : 1;
+      return {
         id: uuid(),
-        name: f.name,
-        brand: f.brand,
-        servingSize: f.servingSize,
-        servingUnit: f.servingUnit,
+        food: {
+          id: uuid(),
+          name: f.name,
+          brand: f.brand,
+          servingSize: f.servingSize,
+          servingUnit: f.servingUnit,
+          calories: f.calories / servings,
+          protein: f.protein / servings,
+          carbs: f.carbs / servings,
+          fat: f.fat / servings,
+          fiber: f.fiber / servings,
+        },
+        servings,
         calories: f.calories,
         protein: f.protein,
         carbs: f.carbs,
         fat: f.fat,
         fiber: f.fiber,
-      },
-      servings: f.servings,
-      calories: f.calories,
-      protein: f.protein,
-      carbs: f.carbs,
-      fat: f.fat,
-      fiber: f.fiber,
-    }));
+      };
+    });
     onLoadTemplate(foods, template.type as MealType);
     onClose();
   }, [onLoadTemplate, onClose]);

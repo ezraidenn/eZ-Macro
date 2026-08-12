@@ -10,6 +10,7 @@ import {
   isSameDay,
   getDaysInRange,
   movingAverage,
+  isCountableUnit,
 } from "@/lib/utils";
 
 // ─── formatNumber ────────────────────────────────────────────────────────────
@@ -248,6 +249,28 @@ describe("getDaysInRange", () => {
     const end = new Date("2024-01-01T12:00:00Z");
     const result = getDaysInRange(start, end);
     expect(result.length).toBe(0);
+  });
+});
+
+// ─── isCountableUnit ─────────────────────────────────────────────────────────
+
+describe("isCountableUnit", () => {
+  it("mass/volume units are NOT countable", () => {
+    for (const unit of ["g", "G", "gr", "gramos", "kg", "ml", "l", "oz", "lb", " g "]) {
+      expect(isCountableUnit(unit)).toBe(false);
+    }
+  });
+
+  it("piece-like units ARE countable", () => {
+    for (const unit of ["pza", "tortilla", "rebanada", "taco", "huevo", "lata", "cda"]) {
+      expect(isCountableUnit(unit)).toBe(true);
+    }
+  });
+
+  it("empty/undefined is not countable", () => {
+    expect(isCountableUnit("")).toBe(false);
+    expect(isCountableUnit(undefined)).toBe(false);
+    expect(isCountableUnit(null)).toBe(false);
   });
 });
 
