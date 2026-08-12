@@ -1,4 +1,4 @@
-import { normalizeUnitFields } from "@/lib/analysis";
+import { normalizeUnitFields, computeItemKcal } from "@/lib/analysis";
 
 const base = {
   name: "Huevo revuelto",
@@ -130,5 +130,26 @@ describe("normalizeUnitFields", () => {
       unitLabel: "x".repeat(100),
     });
     expect((result.unitLabel as string).length).toBeLessThanOrEqual(20);
+  });
+});
+
+describe("computeItemKcal", () => {
+  it("applies Atwater factors (P4 + C4 + F9)", () => {
+    expect(computeItemKcal({ protein: 30, carbs: 40, fat: 10 })).toBe(370);
+  });
+
+  it("includes alcohol at 7 kcal/g (una cerveza no pierde sus calorías)", () => {
+    // Cerveza regular: C13, P2, alcohol 14g → 60 + 98 = 158 kcal
+    expect(computeItemKcal({ protein: 2, carbs: 13, fat: 0, alcoholGrams: 14 })).toBe(158);
+  });
+
+  it("treats missing/null/invalid fields as 0", () => {
+    expect(computeItemKcal({})).toBe(0);
+    expect(computeItemKcal({ protein: 10, alcoholGrams: null })).toBe(40);
+    expect(computeItemKcal({ protein: 10, carbs: NaN })).toBe(40);
+  });
+
+  it("rounds to the nearest integer", () => {
+    expect(computeItemKcal({ protein: 0.6, carbs: 0, fat: 0 })).toBe(2);
   });
 });

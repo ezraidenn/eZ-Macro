@@ -121,6 +121,8 @@ export interface AIFoodAnalysis {
     unitCount?: number; // piezas contadas (múltiplos de 0.5)
     unitLabel?: string; // "pza", "tortilla", "rebanada", "taco", "cda"…
     gramsPerUnit?: number; // peso estimado por pieza
+    /** Gramos de alcohol puro (7 kcal/g, incluidos en calories). */
+    alcoholGrams?: number | null;
   }[];
   totalCalories: number;
   totalProtein: number;

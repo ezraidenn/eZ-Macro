@@ -108,7 +108,11 @@ export default function AnalyticsPage() {
     if (loggedCalories.length < Math.ceil(spanDays / 2)) return null;
 
     const avgCals = loggedCalories.reduce((s, c) => s + c, 0) / loggedCalories.length;
-    const weightChange = last.weight - first.weight;
+    // Usar el promedio móvil en los extremos: el peso crudo de un solo día
+    // trae ±1-2kg de ruido (agua/glucógeno) que distorsiona el TDEE hasta
+    // ±1000 kcal; la media de 7 días lo elimina casi por completo.
+    const weightChange =
+      (last.movingAvg7d ?? last.weight) - (first.movingAvg7d ?? first.weight);
     const tdee = calculateAdaptiveTDEE(Math.round(avgCals), weightChange, spanDays);
     return tdee > 0 ? tdee : null;
   }, [weights, dayLogs]);

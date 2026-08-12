@@ -2,12 +2,91 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSession } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { normalizeUnitFields } from "@/lib/analysis";
+import { normalizeUnitFields, computeItemKcal } from "@/lib/analysis";
 
 const RATE_LIMIT = 20; // análisis por hora por usuario
 const WINDOW_MS = 60 * 60 * 1000;
 
+// Modelo de visión: gpt-5.4 razona mejor el conteo de piezas y la estimación
+// de porciones que gpt-4o, al mismo precio de input. Override por env si hace
+// falta subir (gpt-5.5) o bajar (gpt-4o) sin tocar código.
+const VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-5.4";
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Structured Outputs: el modelo queda OBLIGADO a devolver exactamente este
+// shape — sin fallos de parseo ni campos de unidades faltantes/renombrados.
+const RANGE_SCHEMA = {
+  anyOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      properties: { min: { type: "number" }, max: { type: "number" } },
+      required: ["min", "max"],
+    },
+    { type: "null" },
+  ],
+} as const;
+
+const ANALYSIS_RESPONSE_FORMAT = {
+  type: "json_schema",
+  json_schema: {
+    name: "food_analysis",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        foods: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              name: { type: "string" },
+              quantity: { type: "string" },
+              estimatedGrams: { type: "number" },
+              gramsRange: RANGE_SCHEMA,
+              visualCues: { type: ["string", "null"] },
+              confidence: { type: "string", enum: ["high", "medium", "low"] },
+              countable: { type: "boolean" },
+              unitCount: { type: ["number", "null"] },
+              unitLabel: { type: ["string", "null"] },
+              gramsPerUnit: { type: ["number", "null"] },
+              alcoholGrams: { type: ["number", "null"] },
+              calories: { type: "number" },
+              protein: { type: "number" },
+              carbs: { type: "number" },
+              fat: { type: "number" },
+              fiber: { type: "number" },
+              caloriesRange: RANGE_SCHEMA,
+            },
+            required: [
+              "name", "quantity", "estimatedGrams", "gramsRange", "visualCues",
+              "confidence", "countable", "unitCount", "unitLabel", "gramsPerUnit",
+              "alcoholGrams", "calories", "protein", "carbs", "fat", "fiber",
+              "caloriesRange",
+            ],
+          },
+        },
+        totalCalories: { type: "number" },
+        totalProtein: { type: "number" },
+        totalCarbs: { type: "number" },
+        totalFat: { type: "number" },
+        totalFiber: { type: "number" },
+        referenceObjectFound: { type: ["string", "null"] },
+        overallConfidence: { type: "string", enum: ["high", "medium", "low"] },
+        notes: { type: "array", items: { type: "string" } },
+        energyCheck: { type: ["string", "null"] },
+      },
+      required: [
+        "foods", "totalCalories", "totalProtein", "totalCarbs", "totalFat",
+        "totalFiber", "referenceObjectFound", "overallConfidence", "notes",
+        "energyCheck",
+      ],
+    },
+  },
+} as const;
 
 const SYSTEM_PROMPT = `Eres un analista nutricional experto en estimación por imagen con precisión científica. Tu objetivo es minimizar el error de estimación usando metodología sistemática.
 
@@ -195,12 +274,14 @@ HAMBURGUESAS (completa con pan):
 - Solo la carne de res 100g: 250 kcal, P26g, G17g, C0g
 
 BEBIDAS ALCOHÓLICAS (calorías de alcohol = 7 kcal/g, no se cuentan como macros estándar):
-- Cerveza regular 355ml: 150 kcal, C13g, P2g, G0g [reportar alcohol: 14g]
-- Cerveza light 355ml: 100 kcal, C7g, P1g, G0g [reportar alcohol: 10g]
-- Vino tinto/blanco 150ml copa: 125 kcal, C4g, P0g, G0g [reportar alcohol: 15g]
-- Destilado 45ml (tequila/vodka/whisky): 100 kcal, C0g, P0g, G0g [reportar alcohol: 14g]
-- Michelada 355ml: 200 kcal, C20g, P2g, G1g [alcohol 10g]
-NOTA: Para bebidas alcohólicas, reporta "alcohol: Xg" en notes y suma las calorías del alcohol al total.
+- Cerveza regular 355ml: 150 kcal, C13g, P2g, G0g, alcoholGrams: 14
+- Cerveza light 355ml: 100 kcal, C7g, P1g, G0g, alcoholGrams: 10
+- Vino tinto/blanco 150ml copa: 125 kcal, C4g, P0g, G0g, alcoholGrams: 15
+- Destilado 45ml (tequila/vodka/whisky): 100 kcal, C0g, P0g, G0g, alcoholGrams: 14
+- Michelada 355ml: 200 kcal, C20g, P2g, G1g, alcoholGrams: 10
+NOTA: Para bebidas alcohólicas, reporta "alcoholGrams" en el item (gramos de
+alcohol puro). Sus calorías (7 kcal/g) entran en la fórmula del item. Para todo
+lo demás, alcoholGrams: 0.
 
 REFRESCOS Y BEBIDAS NO ALCOHÓLICAS:
 - Coca-Cola regular 355ml: 140 kcal, C39g, P0g, G0g
@@ -251,10 +332,10 @@ Ejemplo: Si estimaste 300g pollo con piel = 87g proteína
 
 PASO 6: CÁLCULO DE TOTALES Y VERIFICACIÓN (OBLIGATORIO)
 Para CADA alimento, calcula calorías usando LA FÓRMULA EXACTA:
-calories = (protein × 4) + (carbs × 4) + (fat × 9)
+calories = (protein × 4) + (carbs × 4) + (fat × 9) + (alcoholGrams × 7)
 
 NUNCA uses valores de calorías de memoria o tablas directamente.
-SIEMPRE calcula desde los macros.
+SIEMPRE calcula desde los macros (y el alcohol si aplica).
 
 Ejemplo correcto:
 - Pollo 300g: P87g, C0g, F24g
@@ -307,21 +388,15 @@ FORMATO DE SALIDA (JSON válido, sin markdown):
       "unitCount": 3,
       "unitLabel": "pza",
       "gramsPerUnit": 67,
-      "visualCues": "Señales observadas (piel, aceite, tamaño vs referencia)",
+      "alcoholGrams": 0,
+      "visualCues": "Señales observadas (piel, aceite, tamaño vs referencia; para pollo/carne: tipo de corte, hueso, piel y peso comestible)",
       "confidence": "high|medium|low",
       "calories": 450,
       "protein": 35,
       "carbs": 12,
       "fat": 28,
       "fiber": 2,
-      "caloriesRange": {"min": 380, "max": 520},
-      "chickenClassification": {
-        "cutType": "breast|leg_thigh|mixed_quarter|wings|unknown|null",
-        "boneVisible": true,
-        "skinVisible": true,
-        "edibleWeightFactor": 0.65,
-        "edibleGrams": 130
-      }
+      "caloriesRange": {"min": 380, "max": 520}
     }
   ],
   "totalCalories": 450,
@@ -355,8 +430,8 @@ REGLAS CRÍTICAS:
 10. Bebidas: incluir (coca zero = 0 kcal, coca regular 355ml = 140 kcal)
 11. **PROTEÍNA: Usa valores conservadores. Si calculas >30g proteína/100g en pollo, REDUCE el peso estimado o ajusta a 29g/100g máximo**
 12. **VALIDACIÓN FINAL: Proteína total ÷ peso total de proteínas animales debe dar ≤30g/100g. Si no, recalcula.**
-13. **CALORÍAS = FÓRMULA OBLIGATORIA: Para CADA alimento, calories DEBE ser exactamente (protein×4 + carbs×4 + fat×9). NO uses valores de tablas.**
-14. **VERIFICACIÓN MATEMÁTICA: Antes de enviar el JSON, verifica que CADA item cumple: |calories - (P×4+C×4+F×9)| < 5 kcal**
+13. **CALORÍAS = FÓRMULA OBLIGATORIA: Para CADA alimento, calories DEBE ser exactamente (protein×4 + carbs×4 + fat×9 + alcoholGrams×7). NO uses valores de tablas.**
+14. **VERIFICACIÓN MATEMÁTICA: Antes de enviar el JSON, verifica que CADA item cumple: |calories - (P×4+C×4+F×9+A×7)| < 5 kcal**
 15. **CONTEXTO DEL USUARIO: Si el usuario especificó cantidades, ingredientes o nombre del plato, esos valores tienen prioridad ABSOLUTA sobre tu estimación visual.**
 16. **DESGLOSE UNITARIO: Para todo alimento contable reporta countable/unitCount/unitLabel/gramsPerUnit contando las piezas UNA POR UNA. estimatedGrams = unitCount × gramsPerUnit, y los macros del item son el TOTAL de todas las piezas. Si el usuario dijo cuántas piezas hay, usa ESE número.**
 
@@ -425,7 +500,7 @@ export async function POST(req: NextRequest) {
     userPrompt += "\n\nReturn nutritional breakdown as JSON.";
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: VISION_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -436,8 +511,12 @@ export async function POST(req: NextRequest) {
           ],
         },
       ],
-      max_tokens: 2500,
-      temperature: 0.1,
+      // Los modelos con razonamiento (gpt-5.x) consumen parte del presupuesto
+      // en tokens de razonamiento antes de emitir el JSON — dar holgura.
+      max_completion_tokens: 6000,
+      // gpt-5.x no acepta temperature custom; gpt-4o sí (determinismo)
+      ...(VISION_MODEL.startsWith("gpt-4") ? { temperature: 0.1 } : {}),
+      response_format: ANALYSIS_RESPONSE_FORMAT as any,
     });
 
     const content = response.choices[0]?.message?.content ?? "";
@@ -455,11 +534,11 @@ export async function POST(req: NextRequest) {
     }
 
     // CRITICAL: Validate and auto-correct calorie-macro consistency
-    // Formula: kcal = (protein × 4) + (carbs × 4) + (fat × 9)
+    // Formula: kcal = (protein × 4) + (carbs × 4) + (fat × 9) + (alcohol × 7)
+    // El término de alcohol evita que el validador "corrija" hacia abajo las
+    // bebidas alcohólicas (una cerveza perdía ~90 kcal).
     const validateAndCorrectCalories = (item: any) => {
-      const calculatedKcal = Math.round(
-        (item.protein * 4) + (item.carbs * 4) + (item.fat * 9)
-      );
+      const calculatedKcal = computeItemKcal(item);
       const reportedKcal = item.calories;
       const difference = Math.abs(calculatedKcal - reportedKcal);
       const percentDiff = calculatedKcal > 0 ? (difference / calculatedKcal) * 100 : 0;
@@ -491,12 +570,16 @@ export async function POST(req: NextRequest) {
         carbs: acc.carbs + food.carbs,
         fat: acc.fat + food.fat,
         fiber: acc.fiber + (food.fiber || 0),
-      }), { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+        alcohol: acc.alcohol + (Number(food.alcoholGrams) || 0),
+      }), { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, alcohol: 0 });
 
-      // Validate total calories
-      const calculatedTotalKcal = Math.round(
-        (totals.protein * 4) + (totals.carbs * 4) + (totals.fat * 9)
-      );
+      // Validate total calories (incluye alcohol a 7 kcal/g)
+      const calculatedTotalKcal = computeItemKcal({
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
+        alcoholGrams: totals.alcohol,
+      });
       const reportedTotalKcal = parsed.totalCalories || totals.calories;
       const totalDifference = Math.abs(calculatedTotalKcal - reportedTotalKcal);
       const totalPercentDiff = calculatedTotalKcal > 0 ? (totalDifference / calculatedTotalKcal) * 100 : 0;
@@ -517,7 +600,8 @@ export async function POST(req: NextRequest) {
       parsed.totalFiber = Math.round(totals.fiber);
 
       // Add energy check verification
-      parsed.energyCheck = `Verificación: ${calculatedTotalKcal} kcal = (${parsed.totalProtein}×4 + ${parsed.totalCarbs}×4 + ${parsed.totalFat}×9) ✓`;
+      const alcoholTerm = totals.alcohol > 0 ? ` + ${Math.round(totals.alcohol)}×7` : "";
+      parsed.energyCheck = `Verificación: ${calculatedTotalKcal} kcal = (${parsed.totalProtein}×4 + ${parsed.totalCarbs}×4 + ${parsed.totalFat}×9${alcoholTerm}) ✓`;
     }
 
     return NextResponse.json(parsed);

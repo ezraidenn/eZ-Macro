@@ -8,6 +8,10 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const RATE_LIMIT = 30; // recomendaciones por hora por usuario
 const WINDOW_MS = 60 * 60 * 1000;
 
+// Texto estructurado sin visión: la variante mini es suficiente y más barata.
+// Override por env sin tocar código.
+const TEXT_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt-5.4-mini";
+
 const SYSTEM_PROMPT = `You are a professional nutritionist AI with deep expertise in sports nutrition and evidence-based dietary science. Based on the user's remaining macros, priority selections, and goal context, recommend 4 specific, practical food options.
 
 Return ONLY valid JSON (no markdown, no code fences) with this structure:
@@ -153,13 +157,16 @@ ${remaining.calories < 300 ? "IMPORTANT: Very few calories remain — recommend 
 Respond in ${lang}. Food names and descriptions in ${lang}.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: TEXT_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
       ],
-      max_tokens: 1200,
-      temperature: 0.6,
+      // Holgura para tokens de razonamiento (gpt-5.x) + el JSON de salida
+      max_completion_tokens: 4000,
+      // gpt-5.x no acepta temperature custom; gpt-4o sí
+      ...(TEXT_MODEL.startsWith("gpt-4") ? { temperature: 0.6 } : {}),
+      response_format: { type: "json_object" },
     });
 
     const content = response.choices[0]?.message?.content ?? "";

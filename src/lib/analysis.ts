@@ -19,6 +19,21 @@ interface RawAnalyzedFood {
   [key: string]: unknown;
 }
 
+/**
+ * Energía de un item con factores Atwater + alcohol (7 kcal/g).
+ * El alcohol no es un macro estándar pero SÍ aporta calorías: sin este término,
+ * el validador "corregía" una cerveza de 150 kcal a ~60 kcal (undercount real).
+ */
+export function computeItemKcal(m: {
+  protein?: unknown;
+  carbs?: unknown;
+  fat?: unknown;
+  alcoholGrams?: unknown;
+}): number {
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  return Math.round(n(m.protein) * 4 + n(m.carbs) * 4 + n(m.fat) * 9 + n(m.alcoholGrams) * 7);
+}
+
 const MAX_UNIT_COUNT = 50; // nadie tiene 50 tortillas en un plato: dato corrupto
 const MAX_LABEL_LENGTH = 20;
 
